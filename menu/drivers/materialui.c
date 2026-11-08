@@ -673,7 +673,13 @@ typedef struct materialui_handle
    unsigned thumbnail_width_max;
    unsigned grid_columns;   /* MUI_LIST_VIEW_PLAYLIST_THUMB_GRID */
    size_t grid_recent;      /* grid: entries in the 'recently played' section */
-   int grid_toolbar;        /* grid home: focused toolbar button, -1 = none */
+   int grid_menu;           /* grid home: side menu item, -1 = closed */
+   bool grid_menu_right;    /* grid home: side menu on the right */
+   size_t grid_sel;         /* grid: selection seen last frame */
+   size_t grid_prev_sel;    /* grid: entry that was selected before */
+   void *grid_prev_node;    /* grid: its node (box art fading out) */
+   float grid_prev_alpha;   /* grid: its box art opacity when it was left */
+   retro_time_t grid_sel_time;  /* grid: when the selection changed */
    bool grid_home;          /* grid view of the menu_startup_playlist */
    unsigned grid_icons_count;
    struct
@@ -5213,6 +5219,11 @@ static void materialui_compute_entries_box_playlist_grid(
    materialui_scrollbar_init(mui, width, height, header_height);
 }
 
+static float materialui_grid_box_alpha(materialui_handle_t *mui, retro_time_t now);
+static void materialui_render_grid_menu(materialui_handle_t *mui,
+      void *userdata, unsigned video_width, unsigned video_height,
+      unsigned header_height);
+
 /* Section titles over the first entry of each
  * section (drawn once per frame) */
 static void materialui_render_grid_section_titles(
@@ -5226,6 +5237,24 @@ static void materialui_render_grid_section_titles(
    enum msg_hash_enums titles[2];
    uint32_t color = (mui->colors.list_text & 0xFFFFFF00)
          | (uint32_t)(255.0f * mui->transition_alpha);
+
+   /* Selection changed: the cell left fades its box art out, the
+    * new one starts with its screenshot */
+   if (list && selection != mui->grid_sel)
+   {
+      retro_time_t now = menu_driver_get_current_time();
+      if (mui->grid_sel < list->size)
+      {
+         mui->grid_prev_node  = list->list[mui->grid_sel].userdata;
+         mui->grid_prev_sel   = mui->grid_sel;
+         mui->grid_prev_alpha = materialui_grid_box_alpha(mui, now);
+      }
+      mui->grid_sel      = selection;
+      mui->grid_sel_time = now;
+   }
+
+   materialui_render_grid_menu(mui, userdata, video_width, video_height,
+         header_height);
 
    if (!list || mui->grid_recent == 0 || mui->grid_recent >= list->size)
       return;
@@ -5296,37 +5325,42 @@ static void materialui_grid_icons_unload(materialui_handle_t *mui)
    mui->grid_icons_count = 0;
 }
 
-/* Grid cells show the primary and secondary
- * thumbnails in turn, cross-fading between them
- * (materialui_grid_show_time / _fade_time, ms).
- * Returns the opacity of the primary thumbnail
- * of cell 'idx' at the current time */
-static float materialui_grid_primary_alpha(size_t idx)
+/* Grid cells show the in-game screenshot (secondary). The selected
+ * cell, after a short wait, cross-fades to the box art (primary) and
+ * back, in turn (materialui_grid_show_time / _fade_time, ms); the cell
+ * left fades its box art out. Returns the box art opacity of the
+ * selected cell at 'now' */
+#define MUI_GRID_SELECT_WAIT 1000.0f
+static float materialui_grid_box_alpha(materialui_handle_t *mui, retro_time_t now)
 {
    settings_t *settings = config_get_ptr();
    float show           = (float)settings->uints.menu_materialui_grid_show_time;
    float fade           = (float)settings->uints.menu_materialui_grid_fade_time;
    float period         = 2.0f * (show + fade);
-   float t;
+   float t              = (float)((now - mui->grid_sel_time) / 1000) - MUI_GRID_SELECT_WAIT;
 
-   if (period <= 0.0f)
-      return 1.0f;
-
-   /* Offset each cell a little, so they do
-    * not all change at the same time */
-   t = fmodf((float)(menu_driver_get_current_time() / 1000)
-         + (float)(idx % 7) * (period / 7.0f), period);
-
+   if (t <= 0.0f || period <= 0.0f)
+      return 0.0f;
+   t = fmodf(t, period);
+   if (t < fade)
+      return (fade > 0.0f) ? t / fade : 1.0f;
+   t -= fade;
    if (t < show)
       return 1.0f;
    t -= show;
    if (t < fade)
-      return 1.0f - t / fade;
-   t -= fade;
-   if (t < show)
+      return (fade > 0.0f) ? 1.0f - t / fade : 0.0f;
+   return 0.0f;
+}
+
+/* Box art opacity of the cell that was selected before */
+static float materialui_grid_prev_alpha(materialui_handle_t *mui, retro_time_t now)
+{
+   float fade = (float)config_get_ptr()->uints.menu_materialui_grid_fade_time;
+   float t    = (float)((now - mui->grid_sel_time) / 1000);
+   if (fade <= 0.0f || t >= fade)
       return 0.0f;
-   t -= show;
-   return (fade > 0.0f) ? t / fade : 1.0f;
+   return mui->grid_prev_alpha * (1.0f - t / fade);
 }
 
 static void materialui_render_menu_entry_playlist_grid(
@@ -5361,8 +5395,6 @@ static void materialui_render_menu_entry_playlist_grid(
    gfx_display_t *p_disp   = disp_get_ptr();
    gfx_animation_t *p_anim = anim_get_ptr();
    uint32_t text_alpha     = (uint32_t)(255.0f * mui->transition_alpha);
-   size_t cell_idx         = (size_t)(node->x / (node->entry_width > 0.0f ? node->entry_width : 1.0f))
-         + (size_t)(node->y / (node->entry_height > 0.0f ? node->entry_height : 1.0f)) * 3;
 
    if (!p_disp->dispctx->handles_transform)
    {
@@ -5371,16 +5403,19 @@ static void materialui_render_menu_entry_playlist_grid(
       gfx_display_rotate_z(p_disp, &mymat, cosine, sine, userdata);
    }
 
-   /* Thumbnails: the in-game screenshot (secondary) stays still; the
-    * selected cell cross-fades between the two pictures */
-   if (prim_ok && sec_ok && !entry_selected)
+   /* Thumbnails: the in-game screenshot (secondary); the selected cell
+    * (and the one just left) cross-fade to the box art (primary) */
+   if (sec_ok && !(prim_ok && (entry_selected || (void*)node == mui->grid_prev_node)))
       gfx_thumbnail_draw(userdata, video_width, video_height, sec,
             thumb_x, thumb_y, (unsigned)thumb_w, (unsigned)thumb_h,
             GFX_THUMBNAIL_ALIGN_CENTRE,
             mui->transition_alpha, 1.0f, NULL);
    else if (prim_ok && sec_ok)
    {
-      float a = materialui_grid_primary_alpha(cell_idx);
+      retro_time_t now = menu_driver_get_current_time();
+      float a          = entry_selected
+            ? materialui_grid_box_alpha(mui, now)
+            : materialui_grid_prev_alpha(mui, now);
 
       if (a < 1.0f)
          gfx_thumbnail_draw(userdata, video_width, video_height, sec,
@@ -5502,8 +5537,28 @@ static bool materialui_render_process_entry_playlist_grid(
       unsigned thumbnail_upscale_threshold,
       bool network_on_demand_thumbnails)
 {
-   materialui_render_process_entry_playlist_dual_icon(mui, menu_st, node,
-         entry_idx, selection, playlist_idx, first_entry_found, last_entry_found,
+   gfx_animation_t *p_anim = anim_get_ptr();
+   size_t margin           = 2 * (size_t)(mui->grid_columns > 0 ? mui->grid_columns : 1);
+   /* Screenshots of the cells on screen and of two rows above and
+    * below (scrolling shows pictures at once); everything else is
+    * freed. Box art only for the selected cell and the one just left
+    * (and where there is no screenshot) */
+   bool near_screen        = (first_entry_found && !last_entry_found)
+         || (     entry_idx + margin >= mui->first_onscreen_entry
+               && entry_idx <= mui->last_onscreen_entry + margin);
+   bool want_box           = near_screen
+         && (     entry_idx == selection
+               || entry_idx == mui->grid_prev_sel
+               || node->thumbnails.secondary.status == GFX_THUMBNAIL_STATUS_MISSING);
+
+   if (mui->flags & MUI_FLAG_SECONDARY_THUMBNAIL_ENABLED)
+      gfx_thumbnail_process_stream(menu_st->thumbnail_path_data, p_anim,
+            GFX_THUMBNAIL_LEFT, mui->playlist, playlist_idx,
+            &node->thumbnails.secondary, near_screen,
+            thumbnail_upscale_threshold, network_on_demand_thumbnails);
+   gfx_thumbnail_process_stream(menu_st->thumbnail_path_data, p_anim,
+         GFX_THUMBNAIL_RIGHT, mui->playlist, playlist_idx,
+         &node->thumbnails.primary, want_box || !(mui->flags & MUI_FLAG_SECONDARY_THUMBNAIL_ENABLED),
          thumbnail_upscale_threshold, network_on_demand_thumbnails);
 
    if (     (node->grid_icon == 0 || node->grid_icon > mui->grid_icons_count)
@@ -6814,16 +6869,18 @@ static void materialui_render_entry_touch_feedback(
    }
 }
 
-/* Grid home screen (the menu_startup_playlist): the title
- * bar holds the menu's own actions instead of 'back': search,
- * settings (input), quit. Up from the first row of the grid
- * moves the focus there; left/right move along it, OK runs the
- * action, down (or back) returns to the grid */
-#define MUI_GRID_TOOLBAR_SIZE 3
+/* Grid home screen (the menu_startup_playlist): the menu's own
+ * actions (search, settings, quit) are in a side menu over the grid.
+ * It opens when moving left from the first column or right from the
+ * last one, or with 'back'; up/down choose, OK runs the action, the
+ * opposite direction or 'back' closes it */
+#define MUI_GRID_MENU_SIZE 3
 
-static void materialui_grid_toolbar_activate(materialui_handle_t *mui)
+static void materialui_grid_menu_activate(materialui_handle_t *mui)
 {
-   switch (mui->grid_toolbar)
+   int item      = mui->grid_menu;
+   mui->grid_menu = -1;
+   switch (item)
    {
       case 0:
          menu_input_dialog_start_search();
@@ -6839,36 +6896,72 @@ static void materialui_grid_toolbar_activate(materialui_handle_t *mui)
       default:
          break;
    }
-   mui->grid_toolbar = -1;
 }
 
-static void materialui_render_grid_toolbar(materialui_handle_t *mui,
-      gfx_display_t *p_disp, void *userdata,
-      unsigned video_width, unsigned video_height,
-      math_matrix_4x4 *mymat)
+static void materialui_render_grid_menu(materialui_handle_t *mui,
+      void *userdata, unsigned video_width, unsigned video_height,
+      unsigned header_height)
 {
    int i;
-   unsigned textures[MUI_GRID_TOOLBAR_SIZE];
+   math_matrix_4x4 mymat;
+   float panel_color[16];
+   float icon_color[16];
+   unsigned textures[MUI_GRID_MENU_SIZE];
+   enum msg_hash_enums labels[MUI_GRID_MENU_SIZE];
+   gfx_display_t *p_disp = disp_get_ptr();
+   float panel_w         = (float)video_width * 0.3f;
+   float panel_x         = mui->grid_menu_right ? (float)video_width - panel_w : 0.0f;
+   float item_h          = (float)mui->icon_size * 1.5f;
+   float top             = (float)header_height + (float)mui->margin;
+
+   if (mui->grid_menu < 0)
+      return;
 
    textures[0] = MUI_TEXTURE_SEARCH;
    textures[1] = MUI_TEXTURE_SETTINGS;
    textures[2] = MUI_TEXTURE_QUIT;
+   labels[0]   = MENU_ENUM_LABEL_VALUE_SEARCH;
+   labels[1]   = MENU_ENUM_LABEL_VALUE_SETTINGS;
+   labels[2]   = MENU_ENUM_LABEL_VALUE_QUIT_RETROARCH;
 
-   for (i = 0; i < MUI_GRID_TOOLBAR_SIZE; i++)
+   if (!p_disp->dispctx->handles_transform)
+      gfx_display_rotate_z(p_disp, &mymat, 1.0f, 0.0f, userdata);
+
+   for (i = 0; i < 16; i += 4)
    {
-      int x = (int)video_width - (MUI_GRID_TOOLBAR_SIZE - i) * (int)mui->icon_size
-            - (int)mui->nav_bar_layout_width;
+      panel_color[i + 0] = 0.0f;
+      panel_color[i + 1] = 0.0f;
+      panel_color[i + 2] = 0.0f;
+      panel_color[i + 3] = 0.85f;
+      icon_color[i + 0]  = 1.0f;
+      icon_color[i + 1]  = 1.0f;
+      icon_color[i + 2]  = 1.0f;
+      icon_color[i + 3]  = 1.0f;
+   }
+   gfx_display_draw_quad(p_disp, userdata, video_width, video_height,
+         (int)panel_x, (int)header_height, (unsigned)panel_w,
+         video_height - header_height, video_width, video_height,
+         panel_color, NULL);
 
-      if (mui->grid_toolbar == i)
+   for (i = 0; i < MUI_GRID_MENU_SIZE; i++)
+   {
+      float y = top + (float)i * item_h;
+
+      if (i == mui->grid_menu)
          gfx_display_draw_quad(p_disp, userdata, video_width, video_height,
-               x, (int)mui->sys_bar_height, mui->icon_size, mui->title_bar_height,
+               (int)panel_x, (int)y, (unsigned)panel_w, (unsigned)item_h,
                video_width, video_height,
                mui->colors.list_highlighted_background, NULL);
 
       materialui_draw_icon(userdata, p_disp, video_width, video_height,
             mui->icon_size, mui->textures.list[textures[i]],
-            x, (int)mui->sys_bar_height, 0, 1,
-            mui->colors.header_icon, mymat);
+            panel_x + (float)mui->margin, y + (item_h - (float)mui->icon_size) / 2.0f,
+            0, 1, icon_color, &mymat);
+      gfx_display_draw_text(mui->font_data.list.font, msg_hash_to_str(labels[i]),
+            panel_x + (float)mui->margin * 2.0f + (float)mui->icon_size,
+            y + item_h / 2.0f + (float)mui->font_data.list.line_centre_offset,
+            video_width, video_height, 0xFFFFFFFF,
+            TEXT_ALIGN_LEFT, 1.0f, false, 0.0f, false);
    }
 }
 
@@ -7168,13 +7261,9 @@ static void materialui_render_header(
 
    usable_title_bar_width -= menu_title_margin;
 
-   /* > Grid home screen: toolbar */
+   /* > Grid home screen: nothing (see the side menu) */
    if (mui->grid_home)
-   {
-      materialui_render_grid_toolbar(mui, p_disp, userdata,
-            video_width, video_height, mymat);
-      usable_title_bar_width -= MUI_GRID_TOOLBAR_SIZE * (int)mui->icon_size;
-   }
+      usable_title_bar_width -= mui->margin;
    /* > Draw 'search' icon, if required */
    else if (show_search_icon)
    {
@@ -9545,7 +9634,8 @@ static void *materialui_init(void **userdata, bool video_is_threaded)
       mui->flags |= MUI_FLAG_LAST_AUTO_ROTATE_NAVBAR;
 
    mui->first_onscreen_entry              = 0;
-   mui->grid_toolbar                      = -1;
+   mui->grid_menu                         = -1;
+   mui->grid_prev_sel                     = (size_t)-1;
    mui->last_onscreen_entry               = 0;
 
    mui->menu_title[0]                     = '\0';
@@ -10081,7 +10171,7 @@ static void materialui_populate_entries(void *data, const char *path,
          && !string_is_empty(path)
          && string_is_equal(path_basename(path), settings->arrays.menu_startup_playlist);
    if (!mui->grid_home)
-      mui->grid_toolbar = -1;
+      mui->grid_menu = -1;
 
    /* Check whether this is the playlists tab
     * (this requires special handling when
@@ -10691,12 +10781,25 @@ static enum menu_action materialui_grid_navigate(
    switch (action)
    {
       case MENU_ACTION_LEFT:
-         if (selection > 0)
-            selection--;
-         break;
       case MENU_ACTION_RIGHT:
-         if (selection + 1 < entries_end)
-            selection++;
+         {
+            /* Home screen: from the first / last cell of a row,
+             * the side menu */
+            bool left               = (action == MENU_ACTION_LEFT);
+            materialui_node_t *cur  = (materialui_node_t*)list->list[selection].userdata;
+            size_t next             = left ? selection - 1 : selection + 1;
+            materialui_node_t *nn   = (left ? selection > 0 : selection + 1 < entries_end)
+                  ? (materialui_node_t*)list->list[next].userdata : NULL;
+
+            if (mui->grid_home && (!nn || !cur || nn->y != cur->y))
+            {
+               mui->grid_menu       = 0;
+               mui->grid_menu_right = !left;
+               break;
+            }
+            if (nn)
+               selection = next;
+         }
          break;
       case MENU_ACTION_UP:
       case MENU_ACTION_DOWN:
@@ -10724,11 +10827,7 @@ static enum menu_action materialui_grid_navigate(
                }
             }
             if (!row_found)
-            {
-               if (!down && mui->grid_home)
-                  mui->grid_toolbar = 0;
                break;
-            }
 
             /* Nearest cell in that row */
             for (k = 0; k < entries_end; k++)
@@ -10769,29 +10868,36 @@ static enum menu_action materialui_parse_menu_entry_action(
    enum menu_action new_action = action;
    struct menu_state *menu_st  = menu_state_get_ptr();
 
-   /* Grid home screen: toolbar focus, and no 'back' (it is the
+   /* Grid home screen: side menu, and 'back' opens it (this is the
     * only screen) */
    if (mui->grid_home && mui->list_view_type == MUI_LIST_VIEW_PLAYLIST_THUMB_GRID)
    {
-      if (mui->grid_toolbar >= 0)
+      if (mui->grid_menu >= 0)
       {
          switch (action)
          {
-            case MENU_ACTION_LEFT:
-               if (mui->grid_toolbar > 0)
-                  mui->grid_toolbar--;
+            case MENU_ACTION_UP:
+               if (mui->grid_menu > 0)
+                  mui->grid_menu--;
                break;
-            case MENU_ACTION_RIGHT:
-               if (mui->grid_toolbar < MUI_GRID_TOOLBAR_SIZE - 1)
-                  mui->grid_toolbar++;
+            case MENU_ACTION_DOWN:
+               if (mui->grid_menu < MUI_GRID_MENU_SIZE - 1)
+                  mui->grid_menu++;
                break;
             case MENU_ACTION_OK:
             case MENU_ACTION_SELECT:
-               materialui_grid_toolbar_activate(mui);
+               materialui_grid_menu_activate(mui);
                break;
-            case MENU_ACTION_DOWN:
+            case MENU_ACTION_LEFT:
+               if (mui->grid_menu_right)
+                  mui->grid_menu = -1;
+               break;
+            case MENU_ACTION_RIGHT:
+               if (!mui->grid_menu_right)
+                  mui->grid_menu = -1;
+               break;
             case MENU_ACTION_CANCEL:
-               mui->grid_toolbar = -1;
+               mui->grid_menu = -1;
                break;
             default:
                break;
@@ -10799,7 +10905,11 @@ static enum menu_action materialui_parse_menu_entry_action(
          return MENU_ACTION_NOOP;
       }
       if (action == MENU_ACTION_CANCEL)
+      {
+         mui->grid_menu       = 0;
+         mui->grid_menu_right = false;
          return MENU_ACTION_NOOP;
+      }
    }
 
    /* Grid view: the D-pad moves between cells */
