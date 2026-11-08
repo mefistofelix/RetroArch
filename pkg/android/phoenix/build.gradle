@@ -70,6 +70,17 @@ android {
         abiFilters 'armeabi-v7a', 'x86'
       }
     }
+    retrofire {
+      // RetroFire: Fire TV build (32-bit ARM only), next to the store RetroArch
+      applicationIdSuffix '.retrofire'
+      resValue "string", "app_name", "RetroFire"
+      buildConfigField "boolean", "PLAY_STORE_BUILD", "false"
+
+      dimension "variant"
+      ndk {
+        abiFilters 'armeabi-v7a'
+      }
+    }
     playStoreNormal {
       minSdkVersion 21
       targetSdkVersion 35
@@ -114,6 +125,9 @@ android {
     ra32 {
       java.srcDirs += ['../play-core-stub']
     }
+    retrofire {
+      java.srcDirs += ['../play-core-stub']
+    }
     playStoreNormal {
       java.srcDirs += ['../play-core-impl']
     }
@@ -131,6 +145,8 @@ android {
   signingConfigs {
     if (project.hasProperty("RELEASE_STORE_FILE")) {
       release {
+        if (project.hasProperty("RELEASE_STORE_TYPE"))
+          storeType RELEASE_STORE_TYPE
         storeFile file(RELEASE_STORE_FILE)
         storePassword RELEASE_STORE_PASSWORD
         keyAlias RELEASE_KEY_ALIAS

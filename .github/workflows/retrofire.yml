@@ -1,0 +1,114 @@
+name: RetroFire APK
+
+# Builds only the Fire TV APK (flavor "retrofire": com.retroarch.retrofire, armeabi-v7a) with the
+# menu assets, core info files and pad profiles bundled. Every build replaces the rolling
+# pre-release "build-<branch>". Signed with the RetroFire key when the secrets
+# RELEASE_KEYSTORE_B64 / RELEASE_KEYSTORE_PASSWORD are set (stable signature = in-place updates).
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: retrofire-armeabi-v7a
+          max-size: 500M
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('pkg/android/phoenix/build.gradle', 'pkg/android/phoenix/gradle/wrapper/*') }}
+
+      - name: Bundle assets, core info, pad profiles
+        run: |
+          set -e
+          dst=pkg/android/phoenix/assets
+          mkdir -p "$dst/assets"
+          git clone --depth 1 https://github.com/libretro/retroarch-assets.git /tmp/ra-assets
+          for d in glui ozone xmb rgui pkg sounds fonts; do
+            if [ -d "/tmp/ra-assets/$d" ]; then cp -r "/tmp/ra-assets/$d" "$dst/assets/"; fi
+          done
+          git clone --depth 1 https://github.com/libretro/libretro-core-info.git /tmp/ra-info
+          mkdir -p "$dst/info" && cp /tmp/ra-info/*.info "$dst/info/"
+          git clone --depth 1 https://github.com/libretro/retroarch-joypad-autoconfig.git /tmp/ra-auto
+          mkdir -p "$dst/autoconfig" && cp -r /tmp/ra-auto/android "$dst/autoconfig/"
+          du -sh "$dst"/*
+
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/retrofire.p12"
+            {
+              echo "RELEASE_STORE_FILE=$RUNNER_TEMP/retrofire.p12"
+              echo "RELEASE_STORE_TYPE=pkcs12"
+              echo "RELEASE_STORE_PASSWORD=$KEYSTORE_PASSWORD"
+              echo "RELEASE_KEY_ALIAS=retrofire"
+              echo "RELEASE_KEY_PASSWORD=$KEYSTORE_PASSWORD"
+            } >> pkg/android/phoenix/gradle.properties
+          else
+            echo "::warning::no signing secrets: debug key (updates need an uninstall)"
+          fi
+
+      - name: Build APK
+        working-directory: pkg/android/phoenix
+        env:
+          NDK_CCACHE: ccache
+        run: |
+          ./gradlew --no-daemon assembleRetrofireRelease
+          find build/outputs -name "*.apk" -exec ls -l {} \;
+
+      - name: Package
+        run: |
+          mkdir -p out
+          cp pkg/android/phoenix/build/outputs/apk/retrofire/release/*.apk out/RetroFire.apk
+          so=$(find pkg/android/phoenix/build -path "*obj/local/armeabi-v7a/libretroarch-activity.so" | head -1)
+          if [ -n "$so" ]; then cp "$so" out/libretroarch-activity.debug.so; fi
+          cd out && sha256sum * > SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retrofire-apk
+          path: out/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: retrofire-apk
+          path: dist
+      - name: Publish release
+        run: |
+          cd dist
+          tag="build-$(echo "$GITHUB_REF_NAME" | tr '/' '-')"
+          gh release delete "$tag" --yes --cleanup-tag || true
+          gh release create "$tag" * --prerelease --target "$GITHUB_SHA" \
+            --title "$GITHUB_REF_NAME build $(echo "$GITHUB_SHA" | cut -c1-7)" \
+            --notes "Automatic build of $GITHUB_REF_NAME at $GITHUB_SHA."
