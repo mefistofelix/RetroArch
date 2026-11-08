@@ -77,6 +77,8 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 | `materialui_grid_fade_time` | ms, default `2000` | Grid: how long the cross-fade between the two pictures takes |
 | `menu_startup_playlist` | playlist file name, e.g. `Giochi.lpl` (new, default empty) | open that playlist when the app starts (Back goes to the usual menu) |
 | `playlist_recent_first` | `true` / `false` (new, default `false`) | in playlists, content that is in the history comes first, most recent first |
+| `quick_menu_show_disk_control` | `true` / `false` (new, default `true`) | show Disk Control in the in-game menu (a game override can turn it back on for multi-disk games) |
+| Delete State (in-game menu, new) | shown with `savestate_auto_save` and `savestate_auto_load` on, when the game has an automatic state | deletes that state and its picture, restarts the game |
 | `input_android_physical_keyboard` | `auto` (new) | every full (alphabetic) keyboard is a keyboard, whatever its name; gamepads and remotes are not. The upstream values (one device name, or `vvvv:pppp Name`) still work |
 
 ## Development status
@@ -88,7 +90,7 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 | External config + tokens | works on the Fire TV 4K Max (8 Nov 2026) |
 | Cores copied from the stick | works: 12 cores in about 5 s on the first start, a game starts with them |
 | Keyboard `auto` | works: the Logitech USB keyboard drives the menu, no "fallback" pad |
-| Grid view (`materialui_thumbnail_view_landscape = "5"`, portrait `"4"`): cells, box art and screenshot cross-fading, title and info over the picture, D-pad between cells | works on the Fire TV; text size and the info line to tune |
+| Grid view (`materialui_thumbnail_view_landscape = "5"`, portrait `"4"`): cells, box art and screenshot cross-fading, title and info over the picture, D-pad between cells | works on the Fire TV. Each cell fades by its own opacity (no jumps when the selection moves on); at most 3 image loads in flight (they cannot be cancelled), cells on screen first, so fast scrolling never queues the cells passed over |
 | Start on a playlist (`menu_startup_playlist`), recently played first (`playlist_recent_first`) | start on the playlist works on the Fire TV; recent-first waits for a saved history (fixed: folders created) |
 | Fire TV remote no longer resets the pad ports when it is used | to do |
 | Device reservation: a pad moved to its reserved port loses its buttons | to investigate |
