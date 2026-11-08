@@ -5290,17 +5290,8 @@ static void materialui_grid_icons_unload(materialui_handle_t *mui)
    for (i = 0; i < mui->grid_icons_count; i++)
       if (mui->grid_icons[i].image)
          video_driver_texture_unload(&mui->grid_icons[i].image);
-}
-
-static void materialui_grid_icons_reload(materialui_handle_t *mui)
-{
-   unsigned i;
-   for (i = 0; i < mui->grid_icons_count; i++)
-   {
-      mui->grid_icons[i].image = 0;
-      gfx_display_reset_textures_list(mui->grid_icons[i].name, mui->sysicons_path,
-            &mui->grid_icons[i].image, TEXTURE_FILTER_MIPMAP_LINEAR, NULL, NULL);
-   }
+   /* Forget them: entries load their icon again when drawn */
+   mui->grid_icons_count = 0;
 }
 
 /* Grid cells show the primary and secondary
@@ -5404,32 +5395,23 @@ static void materialui_render_menu_entry_playlist_grid(
             GFX_THUMBNAIL_ALIGN_CENTRE,
             mui->transition_alpha, 1.0f, NULL);
 
-   /* System icon in the top right corner, on a dark tile */
+   /* System icon, small, in the top right corner */
    if (     node->grid_icon > 0
          && node->grid_icon <= mui->grid_icons_count
          && mui->grid_icons[node->grid_icon - 1].image)
    {
       float icon_color[16];
-      float size = (float)mui->icon_size;
-      float pad  = half_margin / 2.0f;
+      float size = (float)mui->icon_size * 0.5f;
       float ix   = thumb_x + thumb_w - size - half_margin;
       float iy   = thumb_y + half_margin;
 
       for (i = 0; i < 16; i += 4)
       {
-         band_color[i + 0] = 0.0f;
-         band_color[i + 1] = 0.0f;
-         band_color[i + 2] = 0.0f;
-         band_color[i + 3] = 0.6f * mui->transition_alpha;
          icon_color[i + 0] = 1.0f;
          icon_color[i + 1] = 1.0f;
          icon_color[i + 2] = 1.0f;
-         icon_color[i + 3] = mui->transition_alpha;
+         icon_color[i + 3] = 0.9f * mui->transition_alpha;
       }
-      gfx_display_draw_quad(p_disp, userdata, video_width, video_height,
-            (int)(ix - pad), (int)(iy - pad),
-            (unsigned)(size + 2.0f * pad), (unsigned)(size + 2.0f * pad),
-            video_width, video_height, band_color, NULL);
       materialui_draw_icon(userdata, p_disp, video_width, video_height,
             (unsigned)size, mui->grid_icons[node->grid_icon - 1].image,
             ix, iy, 0.0f, 1.0f, icon_color, &mymat);
@@ -5516,7 +5498,7 @@ static bool materialui_render_process_entry_playlist_grid(
          entry_idx, selection, playlist_idx, first_entry_found, last_entry_found,
          thumbnail_upscale_threshold, network_on_demand_thumbnails);
 
-   if (     node->grid_icon == 0
+   if (     (node->grid_icon == 0 || node->grid_icon > mui->grid_icons_count)
          && mui->playlist
          && playlist_idx < playlist_size(mui->playlist))
    {
@@ -10282,7 +10264,6 @@ static void materialui_context_reset(void *data, bool is_threaded)
    materialui_context_reset_textures(mui);
    if (mui->textures.playlist.size >= 1)
       materialui_context_reset_playlist_icons(mui);
-      materialui_grid_icons_reload(mui);
    menu_screensaver_context_destroy(mui->screensaver);
 
    if (path_is_valid(path_menu_wallpaper))
