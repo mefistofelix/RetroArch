@@ -159,6 +159,8 @@ android {
     if (project.hasProperty("RELEASE_STORE_FILE")) {
       release {
         signingConfig signingConfigs.release
+        // RetroFire: lets simpleperf profile the app over adb (native code is unchanged)
+        debuggable true
       }
     }
     else {
