@@ -5277,7 +5277,7 @@ static void materialui_render_menu_entry_playlist_grid(
       char label_buf[NAME_MAX_LENGTH];
       char sublabel_buf[NAME_MAX_LENGTH];
       bool has_sub  = !string_is_empty(entry->sublabel);
-      float band_h  = (float)mui->font_data.list.line_height + half_margin;
+      float band_h  = (float)mui->font_data.hint.line_height + half_margin;
       float band_y;
 
       if (has_sub)
@@ -5301,7 +5301,7 @@ static void materialui_render_menu_entry_playlist_grid(
       if (mui->flags & MUI_FLAG_USE_SMOOTH_TICKER)
       {
          mui->ticker_smooth.selected    = entry_selected;
-         mui->ticker_smooth.font        = mui->font_data.list.font;
+         mui->ticker_smooth.font        = mui->font_data.hint.font;
          mui->ticker_smooth.field_width = (unsigned)usable_width;
          mui->ticker_smooth.src_str     = entry_label;
          mui->ticker_smooth.dst_str     = label_buf;
@@ -5312,13 +5312,13 @@ static void materialui_render_menu_entry_playlist_grid(
       {
          mui->ticker.selected = entry_selected;
          mui->ticker.s        = label_buf;
-         mui->ticker.len      = (size_t)(usable_width / mui->font_data.list.glyph_width);
+         mui->ticker.len      = (size_t)(usable_width / mui->font_data.hint.glyph_width);
          mui->ticker.str      = entry_label;
          gfx_animation_ticker(&mui->ticker);
       }
-      gfx_display_draw_text(mui->font_data.list.font, label_buf,
+      gfx_display_draw_text(mui->font_data.hint.font, label_buf,
             thumb_x + half_margin + (float)mui->ticker_x_offset,
-            band_y + half_margin / 2.0f + (float)mui->font_data.list.line_ascender,
+            band_y + half_margin / 2.0f + (float)mui->font_data.hint.line_ascender,
             video_width, video_height,
             0xFFFFFF00 | text_alpha,
             TEXT_ALIGN_LEFT, 1.0f, false, 0.0f, (x_offset != 0));
@@ -5339,7 +5339,7 @@ static void materialui_render_menu_entry_playlist_grid(
          }
          gfx_display_draw_text(mui->font_data.hint.font, sublabel_buf,
                thumb_x + half_margin,
-               band_y + half_margin / 2.0f + (float)mui->font_data.list.line_height
+               band_y + half_margin / 2.0f + (float)mui->font_data.hint.line_height
                + (float)mui->font_data.hint.line_ascender,
                video_width, video_height,
                0xD0D0D000 | text_alpha,
