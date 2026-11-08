@@ -89,7 +89,7 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 | Cores copied from the stick | works: 12 cores in about 5 s on the first start, a game starts with them |
 | Keyboard `auto` | works: the Logitech USB keyboard drives the menu, no "fallback" pad |
 | Grid view (`materialui_thumbnail_view_landscape = "5"`, portrait `"4"`): cells, box art and screenshot cross-fading, title and info over the picture, D-pad between cells | works on the Fire TV; text size and the info line to tune |
-| Start on a playlist (`menu_startup_playlist`), recently played first (`playlist_recent_first`) | written, to test |
+| Start on a playlist (`menu_startup_playlist`), recently played first (`playlist_recent_first`) | start on the playlist works on the Fire TV; recent-first waits for a saved history (fixed: folders created) |
 | Fire TV remote no longer resets the pad ports when it is used | to do |
 | Device reservation: a pad moved to its reserved port loses its buttons | to investigate |
 | RetroFire PC tools (`rf install`, `rf cores`, `rf push`) write the stick layout and install the APK | done, in use on the Fire TV 4K Max since 8 Nov 2026 |
