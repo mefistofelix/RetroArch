@@ -121,6 +121,11 @@ struct gfx_thumbnail_state
     * for at least gfx_thumbnail_delay ms */
    float stream_delay;
 
+   /* Image load tasks pushed and not finished yet (a task cannot be
+    * cancelled: menus can use this to avoid queuing loads that would
+    * delay the ones the user is waiting for) */
+   unsigned pending_loads;
+
    /* Duration in ms of the thumbnail 'fade in' animation */
    float fade_duration;
 
@@ -139,6 +144,9 @@ typedef struct gfx_thumbnail_state gfx_thumbnail_state_t;
  * requested
  * > if 'delay' is negative, default value is set */
 void gfx_thumbnail_set_stream_delay(float delay);
+
+/* Number of thumbnail image loads in flight */
+unsigned gfx_thumbnail_get_pending_loads(void);
 
 /* Sets duration in ms of the thumbnail 'fade in'
  * animation

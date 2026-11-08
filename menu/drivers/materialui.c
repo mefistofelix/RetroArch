@@ -442,6 +442,7 @@ typedef struct
    } thumbnails;
    unsigned icon_texture_index;
    unsigned grid_icon;   /* grid view: index + 1 in mui->grid_icons, 0 = none yet */
+   float grid_box_alpha; /* grid view: box art opacity over the screenshot */
    float entry_width;
    float entry_height;
    float text_height;
@@ -676,9 +677,6 @@ typedef struct materialui_handle
    int grid_menu;           /* grid home: side menu item, -1 = closed */
    bool grid_menu_right;    /* grid home: side menu on the right */
    size_t grid_sel;         /* grid: selection seen last frame */
-   size_t grid_prev_sel;    /* grid: entry that was selected before */
-   void *grid_prev_node;    /* grid: its node (box art fading out) */
-   float grid_prev_alpha;   /* grid: its box art opacity when it was left */
    retro_time_t grid_sel_time;  /* grid: when the selection changed */
    bool grid_home;          /* grid view of the menu_startup_playlist */
    unsigned grid_icons_count;
@@ -5219,7 +5217,6 @@ static void materialui_compute_entries_box_playlist_grid(
    materialui_scrollbar_init(mui, width, height, header_height);
 }
 
-static float materialui_grid_box_alpha(materialui_handle_t *mui, retro_time_t now);
 static void materialui_render_grid_menu(materialui_handle_t *mui,
       void *userdata, unsigned video_width, unsigned video_height,
       unsigned header_height);
@@ -5309,11 +5306,14 @@ static void materialui_grid_icons_unload(materialui_handle_t *mui)
 
 /* Grid cells show the in-game screenshot (secondary). The selected
  * cell, after a short wait, cross-fades to the box art (primary) and
- * back, in turn (materialui_grid_show_time / _fade_time, ms); the cell
- * left fades its box art out. Returns the box art opacity of the
- * selected cell at 'now' */
+ * back, in turn (materialui_grid_show_time / _fade_time, ms). Returns
+ * the box art opacity the selected cell aims at, at 'now' */
 #define MUI_GRID_SELECT_WAIT 1000.0f
-static float materialui_grid_box_alpha(materialui_handle_t *mui, retro_time_t now)
+/* Grid: image loads in flight at most */
+#define MUI_GRID_MAX_LOADS 3
+/* Grid: time the selection must stay put to load first (us) */
+#define MUI_GRID_SETTLE_US 150000
+static float materialui_grid_box_target(materialui_handle_t *mui, retro_time_t now)
 {
    settings_t *settings = config_get_ptr();
    float show           = (float)settings->uints.menu_materialui_grid_show_time;
@@ -5335,14 +5335,22 @@ static float materialui_grid_box_alpha(materialui_handle_t *mui, retro_time_t no
    return 0.0f;
 }
 
-/* Box art opacity of the cell that was selected before */
-static float materialui_grid_prev_alpha(materialui_handle_t *mui, retro_time_t now)
+/* Moves the box art opacity of a cell towards its target (the cycle
+ * above when selected, 0 otherwise) at the fade speed: a cell never
+ * jumps between pictures, whatever the selection does */
+static void materialui_grid_update_box_alpha(materialui_handle_t *mui,
+      materialui_node_t *node, bool selected, float delta_ms)
 {
-   float fade = (float)config_get_ptr()->uints.menu_materialui_grid_fade_time;
-   float t    = (float)((now - mui->grid_sel_time) / 1000);
-   if (fade <= 0.0f || t >= fade)
-      return 0.0f;
-   return mui->grid_prev_alpha * (1.0f - t / fade);
+   float fade   = (float)config_get_ptr()->uints.menu_materialui_grid_fade_time;
+   float target = selected
+         ? materialui_grid_box_target(mui, menu_driver_get_current_time())
+         : 0.0f;
+   float step   = (fade > 0.0f) ? delta_ms / fade : 1.0f;
+
+   if (node->grid_box_alpha < target)
+      node->grid_box_alpha = MIN(target, node->grid_box_alpha + step);
+   else if (node->grid_box_alpha > target)
+      node->grid_box_alpha = MAX(target, node->grid_box_alpha - step);
 }
 
 static void materialui_render_menu_entry_playlist_grid(
@@ -5385,19 +5393,16 @@ static void materialui_render_menu_entry_playlist_grid(
       gfx_display_rotate_z(p_disp, &mymat, cosine, sine, userdata);
    }
 
-   /* Thumbnails: the in-game screenshot (secondary); the selected cell
-    * (and the one just left) cross-fade to the box art (primary) */
-   if (sec_ok && !(prim_ok && (entry_selected || (void*)node == mui->grid_prev_node)))
+   /* Thumbnails: the in-game screenshot (secondary), cross-fading to
+    * the box art (primary) by the cell's own opacity */
+   if (sec_ok && !(prim_ok && node->grid_box_alpha > 0.0f))
       gfx_thumbnail_draw(userdata, video_width, video_height, sec,
             thumb_x, thumb_y, (unsigned)thumb_w, (unsigned)thumb_h,
             GFX_THUMBNAIL_ALIGN_CENTRE,
             mui->transition_alpha, 1.0f, NULL);
    else if (prim_ok && sec_ok)
    {
-      retro_time_t now = menu_driver_get_current_time();
-      float a          = entry_selected
-            ? materialui_grid_box_alpha(mui, now)
-            : materialui_grid_prev_alpha(mui, now);
+      float a = node->grid_box_alpha;
 
       if (a < 1.0f)
          gfx_thumbnail_draw(userdata, video_width, video_height, sec,
@@ -5409,9 +5414,6 @@ static void materialui_render_menu_entry_playlist_grid(
                thumb_x, thumb_y, (unsigned)thumb_w, (unsigned)thumb_h,
                GFX_THUMBNAIL_ALIGN_CENTRE,
                mui->transition_alpha * a, 1.0f, NULL);
-
-      /* Keep the menu redrawing while cells fade */
-      p_anim->flags |= GFX_ANIM_FLAG_TICKER_IS_ACTIVE;
    }
    else if (prim_ok || sec_ok)
       gfx_thumbnail_draw(userdata, video_width, video_height,
@@ -5521,27 +5523,57 @@ static bool materialui_render_process_entry_playlist_grid(
 {
    gfx_animation_t *p_anim = anim_get_ptr();
    size_t margin           = 2 * (size_t)(mui->grid_columns > 0 ? mui->grid_columns : 1);
-   /* Screenshots of the cells on screen and of two rows above and
-    * below (scrolling shows pictures at once); everything else is
-    * freed. Box art only for the selected cell and the one just left
-    * (and where there is no screenshot) */
-   bool near_screen        = (first_entry_found && !last_entry_found)
+   unsigned pending        = gfx_thumbnail_get_pending_loads();
+   bool selected           = (entry_idx == selection);
+   /* Pictures are kept for the cells on screen and two rows above and
+    * below; everything else is freed. Image loads cannot be cancelled,
+    * so to keep up with fast scrolling only a few are in flight at a
+    * time: cells on screen first, then the rows around them. Cells
+    * passed over while scrolling are never queued */
+   bool on_screen          = first_entry_found && !last_entry_found;
+   bool near_screen        = on_screen
          || (     entry_idx + margin >= mui->first_onscreen_entry
                && entry_idx <= mui->last_onscreen_entry + margin);
-   bool want_box           = near_screen
-         && (     entry_idx == selection
-               || entry_idx == mui->grid_prev_sel
-               || node->thumbnails.secondary.status == GFX_THUMBNAIL_STATUS_MISSING);
+   bool may_load;
+   gfx_thumbnail_t *sec    = &node->thumbnails.secondary;
+   gfx_thumbnail_t *prim   = &node->thumbnails.primary;
+   bool sec_enabled        = (mui->flags & MUI_FLAG_SECONDARY_THUMBNAIL_ENABLED);
+   /* Box art: for the selected cell, cells still fading it out, and
+    * cells with no screenshot */
+   bool want_box;
 
-   if (mui->flags & MUI_FLAG_SECONDARY_THUMBNAIL_ENABLED)
+   /* Selection changed: the wait before the box art starts again */
+   if (selection != mui->grid_sel)
+   {
+      mui->grid_sel      = selection;
+      mui->grid_sel_time = menu_driver_get_current_time();
+   }
+   materialui_grid_update_box_alpha(mui, node, selected, p_anim->delta_time);
+   /* The selected cell goes first, once the selection stops moving */
+   may_load = (selected && menu_driver_get_current_time()
+               - mui->grid_sel_time > MUI_GRID_SETTLE_US)
+         || (on_screen ? pending < MUI_GRID_MAX_LOADS : pending == 0);
+   if (node->grid_box_alpha > 0.0f || selected)
+      /* Keep the menu redrawing while cells fade */
+      p_anim->flags |= GFX_ANIM_FLAG_TICKER_IS_ACTIVE;
+
+   want_box = near_screen
+         && (     selected
+               || node->grid_box_alpha > 0.0f
+               || !sec_enabled
+               || sec->status == GFX_THUMBNAIL_STATUS_MISSING);
+
+   if (sec_enabled && (!near_screen || may_load
+            || sec->status != GFX_THUMBNAIL_STATUS_UNKNOWN))
       gfx_thumbnail_process_stream(menu_st->thumbnail_path_data, p_anim,
             GFX_THUMBNAIL_LEFT, mui->playlist, playlist_idx,
-            &node->thumbnails.secondary, near_screen,
+            sec, near_screen,
             thumbnail_upscale_threshold, network_on_demand_thumbnails);
-   gfx_thumbnail_process_stream(menu_st->thumbnail_path_data, p_anim,
-         GFX_THUMBNAIL_RIGHT, mui->playlist, playlist_idx,
-         &node->thumbnails.primary, want_box || !(mui->flags & MUI_FLAG_SECONDARY_THUMBNAIL_ENABLED),
-         thumbnail_upscale_threshold, network_on_demand_thumbnails);
+   if (!want_box || may_load || prim->status != GFX_THUMBNAIL_STATUS_UNKNOWN)
+      gfx_thumbnail_process_stream(menu_st->thumbnail_path_data, p_anim,
+            GFX_THUMBNAIL_RIGHT, mui->playlist, playlist_idx,
+            prim, want_box,
+            thumbnail_upscale_threshold, network_on_demand_thumbnails);
 
    if (     (node->grid_icon == 0 || node->grid_icon > mui->grid_icons_count)
          && mui->playlist
@@ -6444,23 +6476,6 @@ static void materialui_render_menu_list(
          && (mui->list_view_type != MUI_LIST_VIEW_PLAYLIST_THUMB_DESKTOP);
    if (!list)
       return;
-
-   /* Grid: selection changed (before any cell is drawn, so that the cell
-    * left keeps its picture and fades its box art out, and the new one
-    * starts with its screenshot) */
-   if (     mui->list_view_type == MUI_LIST_VIEW_PLAYLIST_THUMB_GRID
-         && selection != mui->grid_sel)
-   {
-      retro_time_t now = menu_driver_get_current_time();
-      if (mui->grid_sel < list->size)
-      {
-         mui->grid_prev_node  = list->list[mui->grid_sel].userdata;
-         mui->grid_prev_sel   = mui->grid_sel;
-         mui->grid_prev_alpha = materialui_grid_box_alpha(mui, now);
-      }
-      mui->grid_sel      = selection;
-      mui->grid_sel_time = now;
-   }
 
    /* Unnecessary sanity check... */
    first_entry = (mui->first_onscreen_entry < entries_end) ? mui->first_onscreen_entry : entries_end;
@@ -9646,7 +9661,6 @@ static void *materialui_init(void **userdata, bool video_is_threaded)
 
    mui->first_onscreen_entry              = 0;
    mui->grid_menu                         = -1;
-   mui->grid_prev_sel                     = (size_t)-1;
    mui->last_onscreen_entry               = 0;
 
    mui->menu_title[0]                     = '\0';
@@ -12257,6 +12271,10 @@ static void materialui_list_insert(void *userdata,
 
    if (!node)
       return;
+
+   /* Grid view: icon and box art opacity of the new entry */
+   node->grid_icon      = 0;
+   node->grid_box_alpha = 0.0f;
 
    node->icon_type          = MUI_ICON_TYPE_NONE;
    node->icon_texture_index = 0;

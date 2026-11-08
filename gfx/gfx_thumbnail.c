@@ -67,6 +67,11 @@ void gfx_thumbnail_set_stream_delay(float delay)
          delay : DEFAULT_GFX_THUMBNAIL_STREAM_DELAY;
 }
 
+unsigned gfx_thumbnail_get_pending_loads(void)
+{
+   return gfx_thumb_st.pending_loads;
+}
+
 /* Sets duration in ms of the thumbnail 'fade in'
  * animation
  * > If 'duration' is negative, default value is set */
@@ -147,6 +152,9 @@ static void gfx_thumbnail_handle_upload(
    struct texture_image *img          = (struct texture_image*)task_data;
    gfx_thumbnail_tag_t *thumbnail_tag = (gfx_thumbnail_tag_t*)user_data;
    bool fade_enabled                  = false;
+
+   if (p_gfx_thumb->pending_loads > 0)
+      p_gfx_thumb->pending_loads--;
 
    /* Sanity check */
    if (!thumbnail_tag)
@@ -327,7 +335,10 @@ void gfx_thumbnail_request(
                         thumbnail_path, video_driver_supports_rgba(),
                         gfx_thumbnail_upscale_threshold,
                         gfx_thumbnail_handle_upload, thumbnail_tag))
+               {
                   thumbnail->status = GFX_THUMBNAIL_STATUS_PENDING;
+                  p_gfx_thumb->pending_loads++;
+               }
             }
 #ifdef HAVE_NETWORKING
             /* Handle on demand thumbnail downloads */
@@ -432,7 +443,10 @@ void gfx_thumbnail_request_file(
          file_path, video_driver_supports_rgba(),
          gfx_thumbnail_upscale_threshold,
          gfx_thumbnail_handle_upload, thumbnail_tag))
+   {
       thumbnail->status = GFX_THUMBNAIL_STATUS_PENDING;
+      p_gfx_thumb->pending_loads++;
+   }
 }
 
 /* Resets (and free()s the current texture of) the
