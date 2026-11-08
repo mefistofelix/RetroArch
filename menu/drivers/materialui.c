@@ -9545,6 +9545,7 @@ static void *materialui_init(void **userdata, bool video_is_threaded)
       mui->flags |= MUI_FLAG_LAST_AUTO_ROTATE_NAVBAR;
 
    mui->first_onscreen_entry              = 0;
+   mui->grid_toolbar                      = -1;
    mui->last_onscreen_entry               = 0;
 
    mui->menu_title[0]                     = '\0';
@@ -10074,12 +10075,13 @@ static void materialui_populate_entries(void *data, const char *path,
    menu_entries_get_title(mui->menu_title, sizeof(mui->menu_title));
 
    /* The start-up playlist is the home screen (see the grid toolbar) */
-   mui->grid_toolbar = -1;
    mui->grid_home    =
             !string_is_empty(settings->arrays.menu_startup_playlist)
          && string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_DEFERRED_PLAYLIST_LIST))
          && !string_is_empty(path)
          && string_is_equal(path_basename(path), settings->arrays.menu_startup_playlist);
+   if (!mui->grid_home)
+      mui->grid_toolbar = -1;
 
    /* Check whether this is the playlists tab
     * (this requires special handling when
@@ -10682,7 +10684,8 @@ static enum menu_action materialui_grid_navigate(
    if (entries_end == 0)
       return MENU_ACTION_NOOP;
 
-   materialui_auto_select_onscreen_entry(mui, MUI_ONSCREEN_ENTRY_CENTRE);
+   /* No auto-select of an on screen entry: the grid scrolls to keep
+    * the selection visible, and cells of other rows would be picked */
    selection = old_selection = menu_st->selection_ptr;
 
    switch (action)
