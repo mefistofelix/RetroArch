@@ -5238,21 +5238,6 @@ static void materialui_render_grid_section_titles(
    uint32_t color = (mui->colors.list_text & 0xFFFFFF00)
          | (uint32_t)(255.0f * mui->transition_alpha);
 
-   /* Selection changed: the cell left fades its box art out, the
-    * new one starts with its screenshot */
-   if (list && selection != mui->grid_sel)
-   {
-      retro_time_t now = menu_driver_get_current_time();
-      if (mui->grid_sel < list->size)
-      {
-         mui->grid_prev_node  = list->list[mui->grid_sel].userdata;
-         mui->grid_prev_sel   = mui->grid_sel;
-         mui->grid_prev_alpha = materialui_grid_box_alpha(mui, now);
-      }
-      mui->grid_sel      = selection;
-      mui->grid_sel_time = now;
-   }
-
    if (!list || mui->grid_recent == 0 || mui->grid_recent >= list->size)
       return;
 
@@ -6459,6 +6444,23 @@ static void materialui_render_menu_list(
          && (mui->list_view_type != MUI_LIST_VIEW_PLAYLIST_THUMB_DESKTOP);
    if (!list)
       return;
+
+   /* Grid: selection changed (before any cell is drawn, so that the cell
+    * left keeps its picture and fades its box art out, and the new one
+    * starts with its screenshot) */
+   if (     mui->list_view_type == MUI_LIST_VIEW_PLAYLIST_THUMB_GRID
+         && selection != mui->grid_sel)
+   {
+      retro_time_t now = menu_driver_get_current_time();
+      if (mui->grid_sel < list->size)
+      {
+         mui->grid_prev_node  = list->list[mui->grid_sel].userdata;
+         mui->grid_prev_sel   = mui->grid_sel;
+         mui->grid_prev_alpha = materialui_grid_box_alpha(mui, now);
+      }
+      mui->grid_sel      = selection;
+      mui->grid_sel_time = now;
+   }
 
    /* Unnecessary sanity check... */
    first_entry = (mui->first_onscreen_entry < entries_end) ? mui->first_onscreen_entry : entries_end;
