@@ -6926,10 +6926,10 @@ static void materialui_render_grid_menu(materialui_handle_t *mui,
 
    for (i = 0; i < 16; i += 4)
    {
-      panel_color[i + 0] = 0.0f;
-      panel_color[i + 1] = 0.0f;
-      panel_color[i + 2] = 0.0f;
-      panel_color[i + 3] = 0.85f;
+      panel_color[i + 0] = 0.11f;
+      panel_color[i + 1] = 0.11f;
+      panel_color[i + 2] = 0.11f;
+      panel_color[i + 3] = 1.0f;
       icon_color[i + 0]  = 1.0f;
       icon_color[i + 1]  = 1.0f;
       icon_color[i + 2]  = 1.0f;
@@ -7378,6 +7378,10 @@ static void materialui_render_header(
    }
 
    title_x += (int)(mui->ticker_x_offset + menu_title_margin);
+
+   /* Grid home screen: no title bar (more room for the games) */
+   if (mui->grid_home)
+      return;
 
    gfx_display_draw_text(mui->font_data.title.font, menu_title_buf,
          title_x,
@@ -9466,7 +9470,7 @@ static void materialui_layout(materialui_handle_t *mui,
    mui->cursor_size          = mui->dip_base_unit_size / 3;
 
    mui->sys_bar_height       = mui->dip_base_unit_size / 7;
-   mui->title_bar_height     = mui->dip_base_unit_size / 3;
+   mui->title_bar_height     = mui->grid_home ? 0 : mui->dip_base_unit_size / 3;
    new_header_height         = mui->sys_bar_height + mui->title_bar_height;
 
    title_font_size           = mui->dip_base_unit_size / 7;
@@ -10177,6 +10181,17 @@ static void materialui_populate_entries(void *data, const char *path,
          && string_is_equal(path_basename(path), settings->arrays.menu_startup_playlist);
    if (!mui->grid_home)
       mui->grid_menu = -1;
+   {
+      /* Grid home screen: no title bar (more room for the games) */
+      unsigned title_bar = mui->grid_home ? 0 : mui->dip_base_unit_size / 3;
+      if (title_bar != mui->title_bar_height)
+      {
+         gfx_display_t *p_disp_home = disp_get_ptr();
+         mui->title_bar_height      = title_bar;
+         p_disp_home->header_height = mui->sys_bar_height + mui->title_bar_height;
+         mui->flags                |= MUI_FLAG_NEED_COMPUTE;
+      }
+   }
 
    /* Check whether this is the playlists tab
     * (this requires special handling when
