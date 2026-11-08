@@ -72,6 +72,7 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 
 | Option | Values | What it does |
 |---|---|---|
+| `materialui_thumbnail_view_landscape` / `_portrait` | `5` / `4` = Grid (new) | MaterialUI playlists as a grid of pictures, see below |
 | `input_android_physical_keyboard` | `auto` (new) | every full (alphabetic) keyboard is a keyboard, whatever its name; gamepads and remotes are not. The upstream values (one device name, or `vvvv:pppp Name`) still work |
 
 ## Development status
@@ -80,10 +81,10 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 |---|---|
 | Actions build: only the Fire TV APK (armeabi-v7a), assets bundled, rolling release | done |
 | Stable signing key (in-place updates) | waiting for the repo secrets `RELEASE_KEYSTORE_B64` and `RELEASE_KEYSTORE_PASSWORD` |
-| External config + tokens | written, to test on the Fire TV |
-| Cores copied from the stick | written, to test on the Fire TV |
-| Keyboard `auto` | written, to test on the Fire TV |
-| Grid view (playlists and history), two pictures cross-fading, info over the picture | to do |
+| External config + tokens | works on the Fire TV 4K Max (8 Nov 2026) |
+| Cores copied from the stick | works: 12 cores in about 5 s on the first start, a game starts with them |
+| Keyboard `auto` | works: the Logitech USB keyboard drives the menu, no "fallback" pad |
+| Grid view (`materialui_thumbnail_view_landscape = "5"`, portrait `"4"`): cells, box art and screenshot cross-fading, title and info over the picture, D-pad between cells | works on the Fire TV; text size and the info line to tune |
 | Start on a playlist | to do |
 | Fire TV remote no longer resets the pad ports when it is used | to do |
 | Device reservation: a pad moved to its reserved port loses its buttons | to investigate |
