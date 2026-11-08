@@ -12004,6 +12004,10 @@ MSG_HASH(
    "Griglia"
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL,
+   "Mostra tutti"
+   )
+MSG_HASH(
    MENU_ENUM_LABEL_VALUE_MATERIALUI_GRID_RECENT,
    "Giocati di recente"
    )

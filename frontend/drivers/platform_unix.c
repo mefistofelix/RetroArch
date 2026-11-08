@@ -635,10 +635,10 @@ static char android_text_input_text[1024];
 static volatile int android_text_input_state = 0; /* 1 = text, 2 = cancelled */
 
 bool android_text_input_start(const char *title, const char *text,
-      android_text_input_cb_t cb)
+      const char *clear_label, android_text_input_cb_t cb)
 {
    JNIEnv *env = jni_thread_getenv();
-   jstring jtitle, jtext;
+   jstring jtitle, jtext, jclear;
 
    if (!env || !g_android || !g_android->showTextInput)
       return false;
@@ -647,10 +647,12 @@ bool android_text_input_start(const char *title, const char *text,
    android_text_input_state = 0;
    jtitle = (*env)->NewStringUTF(env, title ? title : "");
    jtext  = (*env)->NewStringUTF(env, text  ? text  : "");
+   jclear = (*env)->NewStringUTF(env, clear_label ? clear_label : "");
    CALL_VOID_METHOD_PARAM(env, g_android->activity->clazz,
-         g_android->showTextInput, jtitle, jtext);
+         g_android->showTextInput, jtitle, jtext, jclear);
    (*env)->DeleteLocalRef(env, jtitle);
    (*env)->DeleteLocalRef(env, jtext);
+   (*env)->DeleteLocalRef(env, jclear);
    return true;
 }
 
@@ -2259,7 +2261,7 @@ static void frontend_unix_init(void *data)
    GET_METHOD_ID(env, android_app->accessibilitySpeak, class,
          "accessibilitySpeak", "(Ljava/lang/String;)V");
    GET_METHOD_ID(env, android_app->showTextInput, class,
-         "showTextInput", "(Ljava/lang/String;Ljava/lang/String;)V");
+         "showTextInput", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
 
    CALL_BOOLEAN_METHOD(env, android_app->is_play_store_build, android_app->activity->clazz, android_app->isPlayStoreBuild)
 

@@ -8261,6 +8261,7 @@ bool menu_input_dialog_start_search(void)
       if (android_text_input_start(
                msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH),
                terms ? terms->terms[terms->size - 1] : "",
+               terms ? msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL) : "",
                menu_input_search_native_cb))
          return true;
    }

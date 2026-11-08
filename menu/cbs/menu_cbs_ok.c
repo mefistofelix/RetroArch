@@ -1073,6 +1073,7 @@ int generic_action_ok_displaylist_push(
          info.directory_ptr            = idx;
          menu->rpl_entry_selection_ptr = (unsigned)entry_idx;
          dl_type                       = DISPLAYLIST_GENERIC;
+         menu_displaylist_playlist_note_launch(idx);
          break;
       case ACTION_OK_DL_AUDIO_DSP_PLUGIN:
          filebrowser_clear_type();

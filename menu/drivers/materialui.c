@@ -6477,6 +6477,20 @@ static void materialui_render_menu_list(
    if (!list)
       return;
 
+   /* Grid: back from a game, select the entry that was launched (the
+    * playlist order may have changed) */
+   if (mui->list_view_type == MUI_LIST_VIEW_PLAYLIST_THUMB_GRID)
+   {
+      size_t idx;
+      if (     menu_displaylist_playlist_reselect(&idx)
+            && idx < list->size
+            && idx != selection)
+      {
+         menu_state_get_ptr()->selection_ptr = idx;
+         materialui_navigation_set(mui, true);
+      }
+   }
+
    /* Unnecessary sanity check... */
    first_entry = (mui->first_onscreen_entry < entries_end) ? mui->first_onscreen_entry : entries_end;
    last_entry  = (mui->last_onscreen_entry  < entries_end) ? mui->last_onscreen_entry  : entries_end;
@@ -6888,23 +6902,61 @@ static void materialui_render_entry_touch_feedback(
  * It opens when moving left from the first column or right from the
  * last one, or with 'back'; up/down choose, OK runs the action, the
  * opposite direction or 'back' closes it */
-#define MUI_GRID_MENU_SIZE 3
+#define MUI_GRID_MENU_SIZE 4
+enum
+{
+   MUI_GRID_ITEM_SEARCH = 0,
+   MUI_GRID_ITEM_SHOW_ALL,
+   MUI_GRID_ITEM_SETTINGS,
+   MUI_GRID_ITEM_QUIT
+};
+
+static void materialui_navigation_set(void *data, bool scroll);
+
+/* Side menu items: 'show all' only while a search filter is set */
+static unsigned materialui_grid_menu_items(int *items)
+{
+   unsigned n = 0;
+   items[n++] = MUI_GRID_ITEM_SEARCH;
+   if (menu_entries_search_get_terms())
+      items[n++] = MUI_GRID_ITEM_SHOW_ALL;
+   items[n++] = MUI_GRID_ITEM_SETTINGS;
+   items[n++] = MUI_GRID_ITEM_QUIT;
+   return n;
+}
+
+/* Removes the search filter: every game is shown again */
+static void materialui_grid_clear_search(materialui_handle_t *mui)
+{
+   struct menu_state *menu_st = menu_state_get_ptr();
+   while (menu_entries_search_pop()) { }
+   menu_st->selection_ptr = 0;
+   materialui_navigation_set(mui, false);
+   menu_st->flags |= MENU_ST_FLAG_PREVENT_POPULATE
+                   | MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+}
 
 static void materialui_grid_menu_activate(materialui_handle_t *mui)
 {
-   int item      = mui->grid_menu;
+   int items[MUI_GRID_MENU_SIZE];
+   unsigned n     = materialui_grid_menu_items(items);
+   int item       = (mui->grid_menu >= 0 && (unsigned)mui->grid_menu < n)
+         ? items[mui->grid_menu] : -1;
    mui->grid_menu = -1;
    switch (item)
    {
-      case 0:
+      case MUI_GRID_ITEM_SEARCH:
          menu_input_dialog_start_search();
          break;
-      case 1:
+      case MUI_GRID_ITEM_SHOW_ALL:
+         materialui_grid_clear_search(mui);
+         break;
+      case MUI_GRID_ITEM_SETTINGS:
          generic_action_ok_displaylist_push("", NULL,
                msg_hash_to_str(MENU_ENUM_LABEL_INPUT_SETTINGS),
                0, 0, 0, ACTION_OK_DL_INPUT_SETTINGS_LIST);
          break;
-      case 2:
+      case MUI_GRID_ITEM_QUIT:
          command_event(CMD_EVENT_QUIT, NULL);
          break;
       default:
@@ -6920,9 +6972,11 @@ static void materialui_render_grid_menu(materialui_handle_t *mui,
    math_matrix_4x4 mymat;
    float panel_color[16];
    float icon_color[16];
+   int items[MUI_GRID_MENU_SIZE];
    unsigned textures[MUI_GRID_MENU_SIZE];
    enum msg_hash_enums labels[MUI_GRID_MENU_SIZE];
    char label_buf[256];
+   unsigned n_items;
    gfx_display_t *p_disp = disp_get_ptr();
    float panel_w         = (float)video_width * 0.3f;
    float panel_x         = mui->grid_menu_right ? (float)video_width - panel_w : 0.0f;
@@ -6932,12 +6986,29 @@ static void materialui_render_grid_menu(materialui_handle_t *mui,
    if (mui->grid_menu < 0)
       return;
 
-   textures[0] = MUI_TEXTURE_SEARCH;
-   textures[1] = MUI_TEXTURE_SETTINGS;
-   textures[2] = MUI_TEXTURE_QUIT;
-   labels[0]   = MENU_ENUM_LABEL_VALUE_SEARCH;
-   labels[1]   = MENU_ENUM_LABEL_VALUE_SETTINGS;
-   labels[2]   = MENU_ENUM_LABEL_VALUE_QUIT_RETROARCH;
+   n_items = materialui_grid_menu_items(items);
+   for (i = 0; i < (int)n_items; i++)
+   {
+      switch (items[i])
+      {
+         case MUI_GRID_ITEM_SEARCH:
+            textures[i] = MUI_TEXTURE_SEARCH;
+            labels[i]   = MENU_ENUM_LABEL_VALUE_SEARCH;
+            break;
+         case MUI_GRID_ITEM_SHOW_ALL:
+            textures[i] = MUI_TEXTURE_REMOVE;
+            labels[i]   = MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL;
+            break;
+         case MUI_GRID_ITEM_SETTINGS:
+            textures[i] = MUI_TEXTURE_SETTINGS;
+            labels[i]   = MENU_ENUM_LABEL_VALUE_SETTINGS;
+            break;
+         default:
+            textures[i] = MUI_TEXTURE_QUIT;
+            labels[i]   = MENU_ENUM_LABEL_VALUE_QUIT_RETROARCH;
+            break;
+      }
+   }
 
    if (!p_disp->dispctx->handles_transform)
       gfx_display_rotate_z(p_disp, &mymat, 1.0f, 0.0f, userdata);
@@ -6958,7 +7029,7 @@ static void materialui_render_grid_menu(materialui_handle_t *mui,
          video_height - header_height, video_width, video_height,
          panel_color, NULL);
 
-   for (i = 0; i < MUI_GRID_MENU_SIZE; i++)
+   for (i = 0; i < (int)n_items; i++)
    {
       float y = top + (float)i * item_h;
 
@@ -6973,7 +7044,7 @@ static void materialui_render_grid_menu(materialui_handle_t *mui,
             panel_x + (float)mui->margin, y + (item_h - (float)mui->icon_size) / 2.0f,
             0, 1, icon_color, &mymat);
       /* Search: with the current filter, if any */
-      if (i == 0 && menu_entries_search_get_terms())
+      if (items[i] == MUI_GRID_ITEM_SEARCH && menu_entries_search_get_terms())
       {
          menu_search_terms_t *terms = menu_entries_search_get_terms();
          snprintf(label_buf, sizeof(label_buf), "%s: %s",
@@ -10927,8 +10998,11 @@ static enum menu_action materialui_parse_menu_entry_action(
                   mui->grid_menu--;
                break;
             case MENU_ACTION_DOWN:
-               if (mui->grid_menu < MUI_GRID_MENU_SIZE - 1)
-                  mui->grid_menu++;
+               {
+                  int items[MUI_GRID_MENU_SIZE];
+                  if (mui->grid_menu < (int)materialui_grid_menu_items(items) - 1)
+                     mui->grid_menu++;
+               }
                break;
             case MENU_ACTION_OK:
             case MENU_ACTION_SELECT:
@@ -10955,12 +11029,7 @@ static enum menu_action materialui_parse_menu_entry_action(
          /* With a search filter, Back shows every game again */
          if (menu_entries_search_get_terms())
          {
-            struct menu_state *menu_st = menu_state_get_ptr();
-            while (menu_entries_search_pop()) { }
-            menu_st->selection_ptr = 0;
-            materialui_navigation_set(mui, false);
-            menu_st->flags |= MENU_ST_FLAG_PREVENT_POPULATE
-                            | MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+            materialui_grid_clear_search(mui);
             return MENU_ACTION_NOOP;
          }
          mui->grid_menu       = 0;

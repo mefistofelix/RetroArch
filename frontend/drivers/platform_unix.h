@@ -380,11 +380,12 @@ bool is_screen_reader_enabled(void);
 
 /* Native text input (Android dialog with the system keyboard, which can
  * also take voice dictation, e.g. the Fire TV remote's microphone).
+ * 'clear_label', if not empty, adds a button that returns an empty text.
  * 'cb' is called on the main thread from android_text_input_poll(), with
  * the text, or NULL if the dialog was cancelled */
 typedef void (*android_text_input_cb_t)(const char *text);
 bool android_text_input_start(const char *title, const char *text,
-      android_text_input_cb_t cb);
+      const char *clear_label, android_text_input_cb_t cb);
 void android_text_input_poll(void);
 
 #ifdef HAVE_SAF

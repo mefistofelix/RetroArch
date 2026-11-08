@@ -2495,6 +2495,40 @@ static char playlist_shown_path[PATH_MAX_LENGTH];
 static size_t *playlist_shown     = NULL;
 static size_t playlist_shown_size = 0;
 static size_t playlist_shown_recent = 0;
+/* Entry launched from the playlist, to be selected again when the
+ * menu shows the playlist after the content (see below) */
+static bool playlist_reselect_wanted  = false;
+static bool playlist_reselect_ready   = false;
+static bool playlist_reselect_recent  = false;
+static size_t playlist_reselect_target = 0;
+static size_t playlist_reselect_idx    = 0;
+
+/* Called when the menu entry at 'list_idx' of the last playlist shown
+ * is launched: the playlist order may change (recently played first),
+ * so the next time it is built the entry is looked for again */
+void menu_displaylist_playlist_note_launch(size_t list_idx)
+{
+   playlist_reselect_ready = false;
+   playlist_reselect_wanted = false;
+   if (playlist_shown && list_idx < playlist_shown_size)
+   {
+      playlist_reselect_target = playlist_shown[list_idx];
+      playlist_reselect_recent = (list_idx < playlist_shown_recent);
+      playlist_reselect_wanted = true;
+   }
+}
+
+/* Menu entry to select after the playlist was built again, if any
+ * (once) */
+bool menu_displaylist_playlist_reselect(size_t *idx)
+{
+   if (!playlist_reselect_ready)
+      return false;
+   playlist_reselect_ready  = false;
+   playlist_reselect_wanted = false;
+   *idx = playlist_reselect_idx;
+   return true;
+}
 
 size_t menu_displaylist_playlist_recent_count(void)
 {
@@ -2524,10 +2558,6 @@ static int menu_displaylist_parse_playlist(
    size_t n_recent                   = 0;
    size_t n_order                    = list_size;
    size_t *shown                     = NULL;
-   size_t old_sel                    = menu_st->selection_ptr;
-   size_t target                     = 0;
-   bool target_recent                = false;
-   bool have_target                  = false;
    const char *pl_path               = playlist_get_conf_path(playlist);
    size_t pos;
 
@@ -2586,16 +2616,6 @@ static int menu_displaylist_parse_playlist(
 
          free(taken);
 
-         /* The entry selected in this playlist before, and its section */
-         if (     playlist_shown
-               && !string_is_empty(pl_path)
-               && string_is_equal(pl_path, playlist_shown_path)
-               && old_sel < playlist_shown_size)
-         {
-            target        = playlist_shown[old_sel];
-            target_recent = (old_sel < playlist_shown_recent);
-            have_target   = true;
-         }
          shown = (size_t*)malloc(n_order * sizeof(size_t));
       }
       else
@@ -2782,17 +2802,32 @@ static int menu_displaylist_parse_playlist(
 
    if (shown)
    {
-      /* Select the same entry again, in the same section if it is
-       * still there (a game played from the recent ones is now the
-       * first of them, one played from the full list stays there) */
-      if (have_target)
+      /* The entry launched from this playlist: where it is now, in the
+       * same section if it is still there (a game played from the
+       * recent ones is now the first of them, one played from the full
+       * list stays there) */
+      const struct playlist_entry *last = NULL;
+      const struct playlist_entry *want = NULL;
+      if (playlist_reselect_wanted && playlist_reselect_target < list_size)
+      {
+         playlist_get_index(playlist, playlist_reselect_target, &want);
+         if (g_defaults.content_history && playlist_size(g_defaults.content_history))
+            playlist_get_index(g_defaults.content_history, 0, &last);
+      }
+      /* Only once the history has the launch (the order is final) */
+      if (     want && last
+            && !string_is_empty(want->path)
+            && !string_is_empty(last->path)
+            && string_is_equal(want->path, last->path)
+            && !string_is_empty(pl_path)
+            && string_is_equal(pl_path, playlist_shown_path))
       {
          size_t k, found = (size_t)-1;
          for (k = 0; k < count; k++)
          {
-            if (shown[k] != target)
+            if (shown[k] != playlist_reselect_target)
                continue;
-            if ((k < playlist_recent_count) == target_recent)
+            if ((k < playlist_recent_count) == playlist_reselect_recent)
             {
                found = k;
                break;
@@ -2801,7 +2836,10 @@ static int menu_displaylist_parse_playlist(
                found = k;
          }
          if (found != (size_t)-1)
-            menu_st->selection_ptr = found;
+         {
+            playlist_reselect_idx   = found;
+            playlist_reselect_ready = true;
+         }
       }
       free(playlist_shown);
       playlist_shown        = shown;

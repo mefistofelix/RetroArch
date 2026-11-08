@@ -355,6 +355,8 @@ typedef struct menu_displaylist_info
 
 /* Entries listed first by playlist_recent_first in the last playlist shown */
 size_t menu_displaylist_playlist_recent_count(void);
+void menu_displaylist_playlist_note_launch(size_t list_idx);
+bool menu_displaylist_playlist_reselect(size_t *idx);
 
 bool menu_displaylist_process(menu_displaylist_info_t *info);
 

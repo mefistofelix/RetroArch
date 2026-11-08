@@ -554,8 +554,9 @@ public class RetroActivityCommon extends NativeActivity
   /**
    * Native text input (input_android_native_keyboard): a dialog with a text field, so the
    * system keyboard comes up, voice dictation included (Fire TV remote microphone).
+   * With a clearLabel, a third button returns an empty text (e.g. remove a search filter).
    */
-  public void showTextInput(final String title, final String text)
+  public void showTextInput(final String title, final String text, final String clearLabel)
   {
     runOnUiThread(new Runnable() {
       public void run() {
@@ -567,7 +568,14 @@ public class RetroActivityCommon extends NativeActivity
         edit.setText(text);
         edit.setSelectAllOnFocus(true);
 
-        final AlertDialog dialog = new AlertDialog.Builder(RetroActivityCommon.this)
+        AlertDialog.Builder builder = new AlertDialog.Builder(RetroActivityCommon.this);
+        if (clearLabel != null && clearLabel.length() > 0)
+          builder.setNeutralButton(clearLabel, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface d, int which) {
+              if (!done[0]) { done[0] = true; textInputDone(""); }
+            }
+          });
+        final AlertDialog dialog = builder
           .setTitle(title)
           .setView(edit)
           .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
