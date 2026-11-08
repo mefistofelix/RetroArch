@@ -1046,6 +1046,7 @@ DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_state_slot,                         
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_load_state,                            MENU_ENUM_SUBLABEL_LOAD_STATE)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_save_state,                            MENU_ENUM_SUBLABEL_SAVE_STATE)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_undo_load_state,                       MENU_ENUM_SUBLABEL_UNDO_LOAD_STATE)
+DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_delete_auto_state,                     MENU_ENUM_SUBLABEL_DELETE_AUTO_STATE)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_undo_save_state,                       MENU_ENUM_SUBLABEL_UNDO_SAVE_STATE)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_record_replay,                         MENU_ENUM_SUBLABEL_RECORD_REPLAY)
 DEFAULT_SUBLABEL_MACRO(action_bind_sublabel_play_replay,                           MENU_ENUM_SUBLABEL_PLAY_REPLAY)
@@ -3576,6 +3577,9 @@ int menu_cbs_init_bind_sublabel(menu_file_list_cbs_t *cbs,
             break;
          case MENU_ENUM_LABEL_UNDO_SAVE_STATE:
             BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_undo_save_state);
+            break;
+         case MENU_ENUM_LABEL_DELETE_AUTO_STATE:
+            BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_delete_auto_state);
             break;
          case MENU_ENUM_LABEL_UNDO_LOAD_STATE:
             BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_undo_load_state);

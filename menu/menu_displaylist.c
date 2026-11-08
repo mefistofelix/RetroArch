@@ -3774,6 +3774,25 @@ static int menu_displaylist_parse_load_content_settings(
                0, 0, NULL))
             count++;
 
+      /* With automatic states (saved on close, loaded on start):
+       * delete the state and start again, only when there is one */
+      if (     savestates_enabled
+            && settings->bools.savestate_auto_save
+            && settings->bools.savestate_auto_load)
+      {
+         char auto_state[PATH_MAX_LENGTH];
+         size_t _len = strlcpy(auto_state,
+               runloop_state_get_ptr()->name.savestate, sizeof(auto_state));
+         strlcpy(auto_state + _len, ".auto", sizeof(auto_state) - _len);
+         if (path_is_valid(auto_state))
+            if (menu_entries_append(list,
+                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_DELETE_AUTO_STATE),
+                  msg_hash_to_str(MENU_ENUM_LABEL_DELETE_AUTO_STATE),
+                  MENU_ENUM_LABEL_DELETE_AUTO_STATE,
+                  MENU_SETTING_ACTION, 0, 0, NULL))
+               count++;
+      }
+
       if (     savestates_enabled
             && settings->bools.quick_menu_show_savestate_submenu)
       {
@@ -3856,6 +3875,7 @@ static int menu_displaylist_parse_load_content_settings(
       }
 
       if ((!retroarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL))
+            && settings->bools.quick_menu_show_disk_control
             && disk_control_enabled(&sys_info->disk_control))
          if (menu_entries_append(list,
                msg_hash_to_str(MENU_ENUM_LABEL_VALUE_DISK_OPTIONS),

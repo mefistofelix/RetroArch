@@ -4918,6 +4918,26 @@ static int action_ok_cheevos_toggle_hardcore_mode(const char *path,
    return generic_action_ok_command(CMD_EVENT_RESUME);
 }
 
+/* Deletes the automatic state of the content (and its thumbnail) and
+ * starts the content again from the beginning */
+static int action_ok_delete_auto_state(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   char auto_state[PATH_MAX_LENGTH];
+   char auto_thumb[PATH_MAX_LENGTH];
+   size_t _len = strlcpy(auto_state,
+         runloop_state_get_ptr()->name.savestate, sizeof(auto_state));
+   strlcpy(auto_state + _len, ".auto", sizeof(auto_state) - _len);
+   _len = strlcpy(auto_thumb, auto_state, sizeof(auto_thumb));
+   strlcpy(auto_thumb + _len, ".png", sizeof(auto_thumb) - _len);
+   if (path_is_valid(auto_state))
+      filestream_delete(auto_state);
+   if (path_is_valid(auto_thumb))
+      filestream_delete(auto_thumb);
+   generic_action_ok_command(CMD_EVENT_RESET);
+   return generic_action_ok_command(CMD_EVENT_RESUME);
+}
+
 static int action_ok_undo_load_state(const char *path,
       const char *label, unsigned type, size_t idx, size_t entry_idx)
 {
@@ -9120,6 +9140,7 @@ static int menu_cbs_init_bind_ok_compare_label(menu_file_list_cbs_t *cbs,
          {MENU_ENUM_LABEL_SAVE_STATE,                          action_ok_save_state},
          {MENU_ENUM_LABEL_LOAD_STATE,                          action_ok_load_state},
          {MENU_ENUM_LABEL_UNDO_LOAD_STATE,                     action_ok_undo_load_state},
+         {MENU_ENUM_LABEL_DELETE_AUTO_STATE,                   action_ok_delete_auto_state},
          {MENU_ENUM_LABEL_UNDO_SAVE_STATE,                     action_ok_undo_save_state},
          {MENU_ENUM_LABEL_RECORD_REPLAY,                       action_ok_record_replay},
          {MENU_ENUM_LABEL_PLAY_REPLAY,                         action_ok_play_replay},

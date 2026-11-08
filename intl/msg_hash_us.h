@@ -9308,6 +9308,14 @@ MSG_HASH(
    "Undo Load State"
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DELETE_AUTO_STATE,
+   "Delete State"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DELETE_AUTO_STATE,
+   "Delete the state saved when the content was closed, and start it again from the beginning."
+   )
+MSG_HASH(
    MENU_ENUM_SUBLABEL_UNDO_LOAD_STATE,
    "If a state was loaded, content will go back to the state prior to loading."
    )

@@ -4073,6 +4073,10 @@ MSG_HASH(
    "undo_load_state"
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_DELETE_AUTO_STATE,
+   "delete_auto_state"
+   )
+MSG_HASH(
    MENU_ENUM_LABEL_UNDO_SAVE_STATE,
    "undo_save_state"
    )

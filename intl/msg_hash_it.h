@@ -9040,6 +9040,14 @@ MSG_HASH(
    "Annulla carica stato"
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_DELETE_AUTO_STATE,
+   "Elimina stato"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_DELETE_AUTO_STATE,
+   "Elimina lo stato salvato alla chiusura e fa ripartire il gioco dall'inizio."
+   )
+MSG_HASH(
    MENU_ENUM_SUBLABEL_UNDO_LOAD_STATE,
    "Se viene caricato un salvataggio, il contenuto tornerà allo stato iniziale prima del caricamento"
    )
