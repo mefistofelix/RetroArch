@@ -5272,8 +5272,8 @@ static void materialui_render_menu_entry_playlist_grid(
             mui->transition_alpha, 1.0f, NULL);
 
    /* Info band over the bottom of the picture:
-    * title, then the first line of the sublabel
-    * (core, play time, last played...) */
+    * title, then platform/region or the first
+    * sublabel line (see below) */
    if (!string_is_empty(entry->rich_label))
       entry_label = entry->rich_label;
    else
@@ -5281,11 +5281,43 @@ static void materialui_render_menu_entry_playlist_grid(
 
    if (usable_width > 0 && !string_is_empty(entry_label))
    {
+      char title_buf[NAME_MAX_LENGTH];
       char label_buf[NAME_MAX_LENGTH];
       char sublabel_buf[NAME_MAX_LENGTH];
-      bool has_sub  = !string_is_empty(entry->sublabel);
-      float band_h  = (float)mui->font_data.hint.line_height + half_margin;
+      const char *info = NULL;
+      bool has_sub;
+      float band_h;
       float band_y;
+
+      /* "Title (Info)": title on the first line, the text in the
+       * last parentheses (platform, region...) on the second;
+       * otherwise the first sublabel line */
+      sublabel_buf[0] = '\0';
+      strlcpy(title_buf, entry_label, sizeof(title_buf));
+      {
+         size_t _len = strlen(title_buf);
+         char *open  = (_len > 2 && title_buf[_len - 1] == ')')
+               ? strrchr(title_buf, '(') : NULL;
+
+         if (open && open > title_buf + 1 && *(open - 1) == ' ')
+         {
+            title_buf[_len - 1] = '\0';
+            strlcpy(sublabel_buf, open + 1, sizeof(sublabel_buf));
+            *(open - 1) = '\0';
+            entry_label = title_buf;
+            info        = sublabel_buf;
+         }
+      }
+      if (!info && !string_is_empty(entry->sublabel))
+      {
+         char *nl;
+         strlcpy(sublabel_buf, entry->sublabel, sizeof(sublabel_buf));
+         if ((nl = strchr(sublabel_buf, '\n')))
+            *nl = '\0';
+         info = sublabel_buf;
+      }
+      has_sub = !string_is_empty(info);
+      band_h  = (float)mui->font_data.hint.line_height + half_margin;
 
       if (has_sub)
          band_h += (float)mui->font_data.hint.line_height;
@@ -5334,11 +5366,7 @@ static void materialui_render_menu_entry_playlist_grid(
       if (has_sub)
       {
          size_t max_chars = (size_t)(usable_width / mui->font_data.hint.glyph_width);
-         char *nl;
 
-         strlcpy(sublabel_buf, entry->sublabel, sizeof(sublabel_buf));
-         if ((nl = strchr(sublabel_buf, '\n')))
-            *nl = '\0';
          if (max_chars > 3 && utf8len(sublabel_buf) > max_chars)
          {
             char *cut = (char*)utf8skip(sublabel_buf, max_chars - 3);

@@ -513,6 +513,7 @@ typedef struct settings
       char microphone_resampler[32];
 #endif
       char input_keyboard_layout[64];
+      char menu_startup_playlist[NAME_MAX_LENGTH];
       char cheevos_custom_host[64];
 
 #ifdef HAVE_LAKKA
@@ -1098,6 +1099,7 @@ typedef struct settings
 
       bool playlist_sort_alphabetical;
       bool playlist_show_sublabels;
+      bool playlist_recent_first;
       bool playlist_show_entry_idx;
       bool playlist_fuzzy_archive_match;
       bool playlist_portable_paths;

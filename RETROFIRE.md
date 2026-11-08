@@ -75,6 +75,8 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 | `materialui_thumbnail_view_landscape` / `_portrait` | `5` / `4` = Grid (new) | MaterialUI playlists as a grid of pictures, see below |
 | `materialui_grid_show_time` | ms, default `6000` | Grid: how long each picture stays |
 | `materialui_grid_fade_time` | ms, default `2000` | Grid: how long the cross-fade between the two pictures takes |
+| `menu_startup_playlist` | playlist file name, e.g. `Giochi.lpl` (new, default empty) | open that playlist when the app starts (Back goes to the usual menu) |
+| `playlist_recent_first` | `true` / `false` (new, default `false`) | in playlists, content that is in the history comes first, most recent first |
 | `input_android_physical_keyboard` | `auto` (new) | every full (alphabetic) keyboard is a keyboard, whatever its name; gamepads and remotes are not. The upstream values (one device name, or `vvvv:pppp Name`) still work |
 
 ## Development status
@@ -87,7 +89,7 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 | Cores copied from the stick | works: 12 cores in about 5 s on the first start, a game starts with them |
 | Keyboard `auto` | works: the Logitech USB keyboard drives the menu, no "fallback" pad |
 | Grid view (`materialui_thumbnail_view_landscape = "5"`, portrait `"4"`): cells, box art and screenshot cross-fading, title and info over the picture, D-pad between cells | works on the Fire TV; text size and the info line to tune |
-| Start on a playlist | to do |
+| Start on a playlist (`menu_startup_playlist`), recently played first (`playlist_recent_first`) | written, to test |
 | Fire TV remote no longer resets the pad ports when it is used | to do |
 | Device reservation: a pad moved to its reserved port loses its buttons | to investigate |
 | RetroFire PC tools (`rf install`, `rf cores`, `rf push`) write the stick layout and install the APK | done, in use on the Fire TV 4K Max since 8 Nov 2026 |

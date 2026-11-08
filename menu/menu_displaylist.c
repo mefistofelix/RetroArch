@@ -2503,9 +2503,66 @@ static int menu_displaylist_parse_playlist(
    bool pl_show_sublabels            = settings->bools.playlist_show_sublabels;
    void (*sanitization)(char*)       = NULL;
    unsigned count                    = 0;
+   size_t *order                     = NULL;
+   size_t pos;
 
    if (list_size == 0)
       return 0;
+
+   /* playlist_recent_first: content that is in the content history
+    * comes first, most recently played first, then everything else in
+    * playlist order. Menu entries keep their playlist index (as with
+    * search), so launching and thumbnails are unaffected. */
+   if (     is_collection
+         && settings->bools.playlist_recent_first
+         && g_defaults.content_history
+         && (order = (size_t*)malloc(list_size * sizeof(size_t))))
+   {
+      bool *taken = (bool*)calloc(list_size, sizeof(bool));
+
+      if (taken)
+      {
+         size_t h, k, n = 0;
+         size_t hist_size = playlist_size(g_defaults.content_history);
+
+         for (h = 0; h < hist_size; h++)
+         {
+            const struct playlist_entry *hist_entry = NULL;
+
+            playlist_get_index(g_defaults.content_history, h, &hist_entry);
+            if (!hist_entry || string_is_empty(hist_entry->path))
+               continue;
+
+            for (k = 0; k < list_size; k++)
+            {
+               const struct playlist_entry *pl_entry = NULL;
+
+               if (taken[k])
+                  continue;
+               playlist_get_index(playlist, k, &pl_entry);
+               if (     pl_entry
+                     && !string_is_empty(pl_entry->path)
+                     && string_is_equal(pl_entry->path, hist_entry->path))
+               {
+                  order[n++] = k;
+                  taken[k]   = true;
+                  break;
+               }
+            }
+         }
+
+         for (k = 0; k < list_size; k++)
+            if (!taken[k])
+               order[n++] = k;
+
+         free(taken);
+      }
+      else
+      {
+         free(order);
+         order = NULL;
+      }
+   }
 
    /* Check whether core name should be added to playlist entries */
    if (   !string_is_equal(menu_driver, "ozone")
@@ -2581,12 +2638,14 @@ static int menu_displaylist_parse_playlist(
          break;
    }
 
-   for (i = 0; i < list_size; i++)
+   for (pos = 0; pos < list_size; pos++)
    {
       char menu_entry_lbl[NAME_MAX_LENGTH];
       const struct playlist_entry *entry = NULL;
       const char *entry_path             = NULL;
       bool entry_valid                   = true;
+
+      i = order ? (unsigned)order[pos] : (unsigned)pos;
 
       /* Read playlist entry */
       playlist_get_index(playlist, i, &entry);
@@ -2674,6 +2733,7 @@ static int menu_displaylist_parse_playlist(
          count++;
    }
 
+   free(order);
    return count;
 }
 

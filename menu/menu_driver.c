@@ -8157,6 +8157,29 @@ bool menu_driver_iterate(
       enum menu_action action,
       retro_time_t current_time)
 {
+   /* menu_startup_playlist = "<name>.lpl": the first time the menu
+    * runs, open that playlist (from playlist_directory), as if it
+    * had been picked from the playlists list. Back returns to the
+    * usual menu. Empty (default): nothing changes. */
+   static bool startup_playlist_done = false;
+
+   if (     !startup_playlist_done
+         && menu_st->driver_data
+         && !string_is_empty(settings->arrays.menu_startup_playlist))
+   {
+      char playlist_path[PATH_MAX_LENGTH];
+
+      startup_playlist_done = true;
+      fill_pathname_join_special(playlist_path,
+            settings->paths.directory_playlist,
+            settings->arrays.menu_startup_playlist,
+            sizeof(playlist_path));
+      if (path_is_valid(playlist_path))
+         generic_action_ok_displaylist_push(playlist_path, NULL, "",
+               FILE_TYPE_PLAYLIST_COLLECTION, 0, 0,
+               ACTION_OK_DL_PLAYLIST_COLLECTION);
+   }
+
    return ( menu_st->driver_data
          && generic_menu_iterate(
             menu_st,
