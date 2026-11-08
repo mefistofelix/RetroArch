@@ -5253,9 +5253,6 @@ static void materialui_render_grid_section_titles(
       mui->grid_sel_time = now;
    }
 
-   materialui_render_grid_menu(mui, userdata, video_width, video_height,
-         header_height);
-
    if (!list || mui->grid_recent == 0 || mui->grid_recent >= list->size)
       return;
 
@@ -8518,6 +8515,14 @@ static void materialui_frame(void *data, video_frame_info_t *video_info)
     *   of text */
    materialui_render_fullscreen_thumbnails(mui, p_disp, userdata,
          video_width, video_height, header_height, selection);
+
+   /* Grid home side menu: over the list and its text */
+   if (mui->grid_menu >= 0)
+   {
+      materialui_render_grid_menu(mui, userdata, video_width, video_height,
+            header_height);
+      font_flush(video_width, video_height, &mui->font_data.list);
+   }
 
    /* Draw title + system bar */
    materialui_render_header(mui, menu_st, menu_list,
