@@ -116,6 +116,34 @@ public final class MainMenuActivity extends PreferenceActivity
 
 	public void finalStartup()
 	{
+		// RetroFire/retroarch.cfg on an external disk: apply it and copy its cores first
+		// (off the UI thread: the first core copy can take a while).
+		if (!RetroActivityFuture.isRunning)
+		{
+			final ExternalConfig ext = ExternalConfig.find(this);
+			if (ext != null)
+			{
+				final String configPath = UserPreferences.getDefaultConfigPath(this);
+				new Thread(new Runnable()
+				{
+					public void run()
+					{
+						ext.applyTo(MainMenuActivity.this, configPath);
+						ext.syncCores(MainMenuActivity.this);
+						runOnUiThread(new Runnable()
+						{
+							public void run() { launch(); }
+						});
+					}
+				}).start();
+				return;
+			}
+		}
+		launch();
+	}
+
+	private void launch()
+	{
 		Intent retro = new Intent(this, RetroActivityFuture.class);
 
 		if (RetroActivityFuture.isRunning) {

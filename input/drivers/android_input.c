@@ -999,7 +999,38 @@ static int android_input_recover_port(android_input_t *android, int id)
 }
 
 
-static bool is_configured_as_physical_keyboard(int vendor_id, int product_id, const char *device_name)
+/* True if Android reports the device as a full (alphabetic) keyboard:
+ * InputDevice.getDevice(id).getKeyboardType() == KEYBOARD_TYPE_ALPHABETIC.
+ * Gamepads and TV remotes are "non alphabetic". */
+static bool android_input_is_alphabetic_keyboard(int id)
+{
+   jclass    class      = 0;
+   jmethodID method     = NULL;
+   jmethodID get_type   = NULL;
+   jobject   device     = NULL;
+   jint      type       = 0;
+   JNIEnv   *env        = (JNIEnv*)jni_thread_getenv();
+
+   if (!env)
+      return false;
+   FIND_CLASS(env, class, "android/view/InputDevice");
+   if (!class)
+      return false;
+   GET_STATIC_METHOD_ID(env, method, class, "getDevice",
+         "(I)Landroid/view/InputDevice;");
+   if (!method)
+      return false;
+   CALL_OBJ_STATIC_METHOD_PARAM(env, device, class, method, (jint)id);
+   if (!device)
+      return false;
+   GET_METHOD_ID(env, get_type, class, "getKeyboardType", "()I");
+   if (!get_type)
+      return false;
+   CALL_INT_METHOD(env, type, device, get_type);
+   return type == 2; /* InputDevice.KEYBOARD_TYPE_ALPHABETIC */
+}
+
+static bool is_configured_as_physical_keyboard(int id, int vendor_id, int product_id, const char *device_name)
 {
     bool is_keyboard;
     bool compare_by_id;
@@ -1007,6 +1038,10 @@ static bool is_configured_as_physical_keyboard(int vendor_id, int product_id, co
     int keyboard_product_id;
     char keyboard_name[256];
     settings_t *settings = config_get_ptr();
+
+    /* "auto": every full keyboard is a keyboard, whatever its name */
+    if (string_is_equal(settings->arrays.input_android_physical_keyboard, "auto"))
+       return android_input_is_alphabetic_keyboard(id);
 
     if (sscanf(settings->arrays.input_android_physical_keyboard, "%04x:%04x ", &keyboard_vendor_id, &keyboard_product_id) != 2)
     {
@@ -1328,7 +1363,7 @@ static void handle_hotplug(android_input_t *android,
     * register the id, and return unless the
     * maximum number of keyboards are already registered. */
    else if ((source & AINPUT_SOURCE_KEYBOARD) && kbd_num < MAX_NUM_KEYBOARDS &&
-            is_configured_as_physical_keyboard(vendorId, productId, device_name))
+            is_configured_as_physical_keyboard(id, vendorId, productId, device_name))
    {
        kbd_id[kbd_num] = id;
        kbd_num++;
