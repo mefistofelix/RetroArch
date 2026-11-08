@@ -148,7 +148,21 @@ public final class ExternalConfig
 		{
 			Map<String, String> tpl = readTemplate(new File(cfgDir, CONFIG));
 			for (Map.Entry<String, String> e : tpl.entrySet())
-				e.setValue(expand(ctx, e.getValue()));
+			{
+				String raw = e.getValue();
+				e.setValue(expand(ctx, raw));
+				// Folders in the writable area must exist: RetroArch does not create
+				// them all (the content history, for one, is then never saved)
+				if (raw.contains("{appdata}"))
+				{
+					String path = e.getValue().replace("\"", "");
+					File f = new File(path);
+					if (e.getKey().endsWith("_path"))
+						f = f.getParentFile();
+					if (f != null)
+						f.mkdirs();
+				}
+			}
 
 			List<String> out = new ArrayList<String>();
 			File app = new File(configPath);
