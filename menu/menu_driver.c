@@ -46,6 +46,7 @@
 
 #include "menu_driver.h"
 #include "menu_cbs.h"
+#include "menu_displaylist.h"
 #include "../driver.h"
 #include "../list_special.h"
 #include "../paths.h"
