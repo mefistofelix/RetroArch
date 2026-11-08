@@ -41,6 +41,7 @@
 #include "../../ui/ui_companion_driver.h"
 
 #include "../menu_driver.h"
+#include "../menu_displaylist.h"
 #include "../menu_screensaver.h"
 
 #include "../../gfx/gfx_animation.h"
@@ -113,6 +114,7 @@
 /* Set a baseline aspect ratio of 4:3 for thumbnail
  * images */
 #define MUI_THUMBNAIL_DEFAULT_ASPECT_RATIO 1.3333333f
+#define MUI_GRID_ICONS_MAX 32
 
 /* Default thumbnail type to select when force-enabling
  * secondary thumbnails
@@ -439,6 +441,7 @@ typedef struct
       gfx_thumbnail_t secondary; /* uintptr_t alignment */
    } thumbnails;
    unsigned icon_texture_index;
+   unsigned grid_icon;   /* grid view: index + 1 in mui->grid_icons, 0 = none yet */
    float entry_width;
    float entry_height;
    float text_height;
@@ -669,6 +672,13 @@ typedef struct materialui_handle
 
    unsigned thumbnail_width_max;
    unsigned grid_columns;   /* MUI_LIST_VIEW_PLAYLIST_THUMB_GRID */
+   size_t grid_recent;      /* grid: entries in the 'recently played' section */
+   unsigned grid_icons_count;
+   struct
+   {
+      char name[NAME_MAX_LENGTH];
+      uintptr_t image;
+   } grid_icons[MUI_GRID_ICONS_MAX];
    unsigned thumbnail_height_max;
    materialui_landscape_optimization_t
          landscape_optimization; /* unsigned alignment */
@@ -5135,17 +5145,26 @@ static void materialui_render_menu_entry_playlist_dual_icon(
  * Entries are cells of mui->grid_columns columns:
  * node->x / node->y give the cell position, so the
  * selection highlight, pointer input and on screen
- * tracking work as they do for lists */
+ * tracking work as they do for lists.
+ * With playlist_recent_first the recently played
+ * entries form a first section; each section starts
+ * on a new row under a title (see
+ * materialui_render_grid_section_titles) */
+static float materialui_grid_section_title_height(materialui_handle_t *mui)
+{
+   return (float)mui->font_data.list.line_height + (float)mui->margin;
+}
+
 static void materialui_compute_entries_box_playlist_grid(
       materialui_handle_t* mui,
       unsigned width, unsigned height, unsigned header_height)
 {
    size_t i;
-   size_t rows;
    struct menu_state *menu_st = menu_state_get_ptr();
    menu_list_t *menu_list     = menu_st->entries.list;
    file_list_t *list          = menu_list ? MENU_LIST_GET_SELECTION(menu_list, 0) : NULL;
    size_t entries_end         = list ? list->size : 0;
+   size_t recent             = menu_displaylist_playlist_recent_count();
    unsigned columns           = (mui->grid_columns > 0) ? mui->grid_columns : 1;
    float list_width           = (float)width -
          (float)(mui->landscape_optimization.border_width * 2) -
@@ -5153,29 +5172,135 @@ static void materialui_compute_entries_box_playlist_grid(
    float cell_width           = list_width / (float)columns;
    float cell_height          = (float)mui->thumbnail_height_max + (float)mui->margin;
    float node_x               = (float)mui->landscape_optimization.border_width;
+   float title_h              = materialui_grid_section_title_height(mui);
+   float recent_h             = 0.0f;
 
    if (!list)
       return;
 
+   /* Sections only when there is something in both */
+   if (recent >= entries_end)
+      recent = 0;
+   if (recent > 0)
+      recent_h = title_h + (float)((recent + columns - 1) / columns) * cell_height;
+   mui->grid_recent = recent;
+
    for (i = 0; i < entries_end; i++)
    {
       materialui_node_t *node = (materialui_node_t*)list->list[i].userdata;
+      size_t k                = (recent > 0 && i >= recent) ? i - recent : i;
+      float base_y            = 0.0f;
 
       if (!node)
          continue;
 
+      if (recent > 0)
+         base_y = (i < recent) ? title_h : recent_h + title_h;
+
       node->text_height  = (float)mui->font_data.list.line_height;
       node->entry_width  = cell_width;
       node->entry_height = cell_height;
-      node->x            = node_x + (float)(i % columns) * cell_width;
-      node->y            = (float)(i / columns) * cell_height;
+      node->x            = node_x + (float)(k % columns) * cell_width;
+      node->y            = base_y + (float)(k / columns) * cell_height;
    }
 
-   rows                = (entries_end + columns - 1) / columns;
-   mui->content_height = (float)rows * cell_height;
+   mui->content_height = (recent > 0 ? recent_h + title_h : 0.0f)
+         + (float)(((entries_end - recent) + columns - 1) / columns) * cell_height;
 
    /* Total height is now known - can initialise scrollbar */
    materialui_scrollbar_init(mui, width, height, header_height);
+}
+
+/* Section titles over the first entry of each
+ * section (drawn once per frame) */
+static void materialui_render_grid_section_titles(
+      materialui_handle_t *mui, void *userdata,
+      unsigned video_width, unsigned video_height,
+      unsigned header_height, int x_offset,
+      file_list_t *list, size_t selection)
+{
+   size_t s;
+   size_t starts[2];
+   enum msg_hash_enums titles[2];
+   uint32_t color = (mui->colors.list_text & 0xFFFFFF00)
+         | (uint32_t)(255.0f * mui->transition_alpha);
+
+   if (!list || mui->grid_recent == 0 || mui->grid_recent >= list->size)
+      return;
+
+   starts[0] = 0;
+   starts[1] = mui->grid_recent;
+   titles[0] = MENU_ENUM_LABEL_VALUE_MATERIALUI_GRID_RECENT;
+   titles[1] = MENU_ENUM_LABEL_VALUE_MATERIALUI_GRID_ALL;
+
+   for (s = 0; s < 2; s++)
+   {
+      materialui_node_t *node = (materialui_node_t*)list->list[starts[s]].userdata;
+      float y;
+
+      if (!node)
+         continue;
+
+      y = (float)header_height - mui->scroll_y + node->y
+            - materialui_grid_section_title_height(mui);
+      if (     y + materialui_grid_section_title_height(mui) < (float)header_height
+            || y > (float)video_height)
+         continue;
+
+      gfx_display_draw_text(mui->font_data.list.font, msg_hash_to_str(titles[s]),
+            (float)x_offset + node->x + (float)mui->margin,
+            y + (float)mui->margin / 2.0f + (float)mui->font_data.list.line_ascender,
+            video_width, video_height, color,
+            TEXT_ALIGN_LEFT, 1.0f, false, 0.0f, (x_offset != 0));
+   }
+}
+
+/* System icons for the grid (the XMB theme's
+ * "<db name>.png", e.g. "Commodore - Amiga.png"),
+ * loaded on first use. Returns index + 1, or 0 */
+static unsigned materialui_grid_icon(materialui_handle_t *mui,
+      const char *db_name)
+{
+   unsigned i;
+   char name[NAME_MAX_LENGTH];
+
+   if (string_is_empty(db_name) || string_is_empty(mui->sysicons_path))
+      return 0;
+
+   fill_pathname(name, path_basename(db_name), ".png", sizeof(name));
+
+   for (i = 0; i < mui->grid_icons_count; i++)
+      if (string_is_equal(mui->grid_icons[i].name, name))
+         return i + 1;
+
+   if (mui->grid_icons_count >= MUI_GRID_ICONS_MAX)
+      return 0;
+
+   i = mui->grid_icons_count++;
+   strlcpy(mui->grid_icons[i].name, name, sizeof(mui->grid_icons[i].name));
+   mui->grid_icons[i].image = 0;
+   gfx_display_reset_textures_list(name, mui->sysicons_path,
+         &mui->grid_icons[i].image, TEXTURE_FILTER_MIPMAP_LINEAR, NULL, NULL);
+   return i + 1;
+}
+
+static void materialui_grid_icons_unload(materialui_handle_t *mui)
+{
+   unsigned i;
+   for (i = 0; i < mui->grid_icons_count; i++)
+      if (mui->grid_icons[i].image)
+         video_driver_texture_unload(&mui->grid_icons[i].image);
+}
+
+static void materialui_grid_icons_reload(materialui_handle_t *mui)
+{
+   unsigned i;
+   for (i = 0; i < mui->grid_icons_count; i++)
+   {
+      mui->grid_icons[i].image = 0;
+      gfx_display_reset_textures_list(mui->grid_icons[i].name, mui->sysicons_path,
+            &mui->grid_icons[i].image, TEXTURE_FILTER_MIPMAP_LINEAR, NULL, NULL);
+   }
 }
 
 /* Grid cells show the primary and secondary
@@ -5224,6 +5349,7 @@ static void materialui_render_menu_entry_playlist_grid(
       int x_offset)
 {
    unsigned i;
+   math_matrix_4x4 mymat;
    float band_color[16];
    const char *entry_label = NULL;
    float entry_x           = (float)x_offset + node->x;
@@ -5244,6 +5370,13 @@ static void materialui_render_menu_entry_playlist_grid(
    uint32_t text_alpha     = (uint32_t)(255.0f * mui->transition_alpha);
    size_t cell_idx         = (size_t)(node->x / (node->entry_width > 0.0f ? node->entry_width : 1.0f))
          + (size_t)(node->y / (node->entry_height > 0.0f ? node->entry_height : 1.0f)) * 3;
+
+   if (!p_disp->dispctx->handles_transform)
+   {
+      float cosine = 1.0f; /* cos(rad)  = cos(0)  = 1.0f */
+      float sine   = 0.0f; /* sine(rad) = sine(0) = 0.0f */
+      gfx_display_rotate_z(p_disp, &mymat, cosine, sine, userdata);
+   }
 
    /* Thumbnails: when both are there, cross-fade */
    if (prim_ok && sec_ok)
@@ -5271,9 +5404,40 @@ static void materialui_render_menu_entry_playlist_grid(
             GFX_THUMBNAIL_ALIGN_CENTRE,
             mui->transition_alpha, 1.0f, NULL);
 
-   /* Info band over the bottom of the picture:
-    * title, then platform/region or the first
-    * sublabel line (see below) */
+   /* System icon in the top right corner, on a dark tile */
+   if (     node->grid_icon > 0
+         && node->grid_icon <= mui->grid_icons_count
+         && mui->grid_icons[node->grid_icon - 1].image)
+   {
+      float icon_color[16];
+      float size = (float)mui->icon_size;
+      float pad  = half_margin / 2.0f;
+      float ix   = thumb_x + thumb_w - size - half_margin;
+      float iy   = thumb_y + half_margin;
+
+      for (i = 0; i < 16; i += 4)
+      {
+         band_color[i + 0] = 0.0f;
+         band_color[i + 1] = 0.0f;
+         band_color[i + 2] = 0.0f;
+         band_color[i + 3] = 0.6f * mui->transition_alpha;
+         icon_color[i + 0] = 1.0f;
+         icon_color[i + 1] = 1.0f;
+         icon_color[i + 2] = 1.0f;
+         icon_color[i + 3] = mui->transition_alpha;
+      }
+      gfx_display_draw_quad(p_disp, userdata, video_width, video_height,
+            (int)(ix - pad), (int)(iy - pad),
+            (unsigned)(size + 2.0f * pad), (unsigned)(size + 2.0f * pad),
+            video_width, video_height, band_color, NULL);
+      materialui_draw_icon(userdata, p_disp, video_width, video_height,
+            (unsigned)size, mui->grid_icons[node->grid_icon - 1].image,
+            ix, iy, 0.0f, 1.0f, icon_color, &mymat);
+   }
+
+   /* Title band over the bottom of the picture: one
+    * line, the title only (the platform is the icon;
+    * a trailing "(...)" such as a region is left out) */
    if (!string_is_empty(entry->rich_label))
       entry_label = entry->rich_label;
    else
@@ -5283,16 +5447,9 @@ static void materialui_render_menu_entry_playlist_grid(
    {
       char title_buf[NAME_MAX_LENGTH];
       char label_buf[NAME_MAX_LENGTH];
-      char sublabel_buf[NAME_MAX_LENGTH];
-      const char *info = NULL;
-      bool has_sub;
-      float band_h;
-      float band_y;
+      float band_h = (float)mui->font_data.list.line_height + half_margin;
+      float band_y = thumb_y + thumb_h - band_h;
 
-      /* "Title (Info)": title on the first line, the text in the
-       * last parentheses (platform, region...) on the second;
-       * otherwise the first sublabel line */
-      sublabel_buf[0] = '\0';
       strlcpy(title_buf, entry_label, sizeof(title_buf));
       {
          size_t _len = strlen(title_buf);
@@ -5300,28 +5457,8 @@ static void materialui_render_menu_entry_playlist_grid(
                ? strrchr(title_buf, '(') : NULL;
 
          if (open && open > title_buf + 1 && *(open - 1) == ' ')
-         {
-            title_buf[_len - 1] = '\0';
-            strlcpy(sublabel_buf, open + 1, sizeof(sublabel_buf));
             *(open - 1) = '\0';
-            entry_label = title_buf;
-            info        = sublabel_buf;
-         }
       }
-      if (!info && !string_is_empty(entry->sublabel))
-      {
-         char *nl;
-         strlcpy(sublabel_buf, entry->sublabel, sizeof(sublabel_buf));
-         if ((nl = strchr(sublabel_buf, '\n')))
-            *nl = '\0';
-         info = sublabel_buf;
-      }
-      has_sub = !string_is_empty(info);
-      band_h  = (float)mui->font_data.hint.line_height + half_margin;
-
-      if (has_sub)
-         band_h += (float)mui->font_data.hint.line_height;
-      band_y = thumb_y + thumb_h - band_h;
 
       for (i = 0; i < 16; i += 4)
       {
@@ -5340,9 +5477,9 @@ static void materialui_render_menu_entry_playlist_grid(
       if (mui->flags & MUI_FLAG_USE_SMOOTH_TICKER)
       {
          mui->ticker_smooth.selected    = entry_selected;
-         mui->ticker_smooth.font        = mui->font_data.hint.font;
+         mui->ticker_smooth.font        = mui->font_data.list.font;
          mui->ticker_smooth.field_width = (unsigned)usable_width;
-         mui->ticker_smooth.src_str     = entry_label;
+         mui->ticker_smooth.src_str     = title_buf;
          mui->ticker_smooth.dst_str     = label_buf;
          mui->ticker_smooth.dst_str_len = sizeof(label_buf);
          gfx_animation_ticker_smooth(&mui->ticker_smooth);
@@ -5351,36 +5488,45 @@ static void materialui_render_menu_entry_playlist_grid(
       {
          mui->ticker.selected = entry_selected;
          mui->ticker.s        = label_buf;
-         mui->ticker.len      = (size_t)(usable_width / mui->font_data.hint.glyph_width);
-         mui->ticker.str      = entry_label;
+         mui->ticker.len      = (size_t)(usable_width / mui->font_data.list.glyph_width);
+         mui->ticker.str      = title_buf;
          gfx_animation_ticker(&mui->ticker);
       }
-      gfx_display_draw_text(mui->font_data.hint.font, label_buf,
+      gfx_display_draw_text(mui->font_data.list.font, label_buf,
             thumb_x + half_margin + (float)mui->ticker_x_offset,
-            band_y + half_margin / 2.0f + (float)mui->font_data.hint.line_ascender,
+            band_y + half_margin / 2.0f + (float)mui->font_data.list.line_ascender,
             video_width, video_height,
             0xFFFFFF00 | text_alpha,
             TEXT_ALIGN_LEFT, 1.0f, false, 0.0f, (x_offset != 0));
-
-      /* First line of the sublabel, cut to fit */
-      if (has_sub)
-      {
-         size_t max_chars = (size_t)(usable_width / mui->font_data.hint.glyph_width);
-
-         if (max_chars > 3 && utf8len(sublabel_buf) > max_chars)
-         {
-            char *cut = (char*)utf8skip(sublabel_buf, max_chars - 3);
-            strlcpy(cut, "...", sizeof(sublabel_buf) - (size_t)(cut - sublabel_buf));
-         }
-         gfx_display_draw_text(mui->font_data.hint.font, sublabel_buf,
-               thumb_x + half_margin,
-               band_y + half_margin / 2.0f + (float)mui->font_data.hint.line_height
-               + (float)mui->font_data.hint.line_ascender,
-               video_width, video_height,
-               0xD0D0D000 | text_alpha,
-               TEXT_ALIGN_LEFT, 1.0f, false, 0.0f, (x_offset != 0));
-      }
    }
+}
+
+/* Grid: same thumbnail streaming as 'dual icon',
+ * plus the system icon of each entry */
+static bool materialui_render_process_entry_playlist_grid(
+      materialui_handle_t* mui,
+      struct menu_state *menu_st, materialui_node_t *node,
+      size_t entry_idx, size_t selection,
+      size_t playlist_idx,
+      bool first_entry_found, bool last_entry_found,
+      unsigned thumbnail_upscale_threshold,
+      bool network_on_demand_thumbnails)
+{
+   materialui_render_process_entry_playlist_dual_icon(mui, menu_st, node,
+         entry_idx, selection, playlist_idx, first_entry_found, last_entry_found,
+         thumbnail_upscale_threshold, network_on_demand_thumbnails);
+
+   if (     node->grid_icon == 0
+         && mui->playlist
+         && playlist_idx < playlist_size(mui->playlist))
+   {
+      const struct playlist_entry *pl_entry = NULL;
+      playlist_get_index(mui->playlist, playlist_idx, &pl_entry);
+      if (pl_entry)
+         node->grid_icon = materialui_grid_icon(mui, pl_entry->db_name);
+   }
+
+   return true;
 }
 
 /* Used for playlist 'desktop'-layout entries
@@ -8487,9 +8633,9 @@ static void materialui_set_list_view_type(materialui_handle_t *mui,
          break;
       case MUI_LIST_VIEW_PLAYLIST_THUMB_GRID:
          materialui_compute_entries_box       = materialui_compute_entries_box_playlist_grid;
-         materialui_render_process_entry      = materialui_render_process_entry_playlist_dual_icon;
+         materialui_render_process_entry      = materialui_render_process_entry_playlist_grid;
          materialui_render_menu_entry         = materialui_render_menu_entry_playlist_grid;
-         materialui_render_selected_entry_aux = NULL;
+         materialui_render_selected_entry_aux = materialui_render_grid_section_titles;
          break;
       case MUI_LIST_VIEW_PLAYLIST_THUMB_DESKTOP:
          materialui_compute_entries_box       = materialui_compute_entries_box_playlist_desktop;
@@ -8750,8 +8896,8 @@ static void materialui_set_thumbnail_dimensions(materialui_handle_t *mui)
       case MUI_LIST_VIEW_PLAYLIST_THUMB_GRID:
          {
             /* This view shows one picture per entry,
-             * in cells: 5 columns in landscape, 3 in
-             * portrait. Cells are a little wider than
+             * in cells: materialui_grid_columns, or 4
+             * in landscape and 2 in portrait. Cells are a little wider than
              * tall, a fair fit for both box art and
              * screenshots */
             int usable_width =
@@ -8759,7 +8905,9 @@ static void materialui_set_thumbnail_dimensions(materialui_handle_t *mui)
                   (int)(mui->landscape_optimization.border_width * 2) -
                   (int)mui->nav_bar_layout_width;
 
-            mui->grid_columns = (mui->flags & MUI_FLAG_IS_PORTRAIT) ? 3 : 5;
+            mui->grid_columns = config_get_ptr()->uints.menu_materialui_grid_columns;
+            if (mui->grid_columns == 0)
+               mui->grid_columns = (mui->flags & MUI_FLAG_IS_PORTRAIT) ? 2 : 4;
 
             /* Sanity check */
             if (usable_width < (int)(mui->grid_columns * (mui->margin + 2)))
@@ -9511,6 +9659,7 @@ static void materialui_context_destroy(void *data)
 
    /* Free playlist icons */
    materialui_context_destroy_playlist_icons(mui);
+   materialui_grid_icons_unload(mui);
 
    /* Free fonts */
    if (mui->font_data.title.font)
@@ -10133,6 +10282,7 @@ static void materialui_context_reset(void *data, bool is_threaded)
    materialui_context_reset_textures(mui);
    if (mui->textures.playlist.size >= 1)
       materialui_context_reset_playlist_icons(mui);
+      materialui_grid_icons_reload(mui);
    menu_screensaver_context_destroy(mui->screensaver);
 
    if (path_is_valid(path_menu_wallpaper))
@@ -10451,8 +10601,10 @@ static void materialui_switch_list_view(materialui_handle_t *mui,
  * as the provided function argument, but may be
  * MENU_ACTION_NOOP if the current selection position
  * requires input to be inhibited */
-/* Grid view: the D-pad moves between cells
- * (left/right by one, up/down by one row).
+/* Grid view: the D-pad moves between cells.
+ * Left/right: previous/next entry. Up/down: the
+ * nearest cell (by x) in the row above/below, since
+ * sections can leave rows unaligned.
  * Returns MENU_ACTION_NOOP: the selection is
  * already updated */
 static enum menu_action materialui_grid_navigate(
@@ -10462,7 +10614,6 @@ static enum menu_action materialui_grid_navigate(
    menu_list_t *menu_list     = menu_st->entries.list;
    file_list_t *list          = menu_list ? MENU_LIST_GET_SELECTION(menu_list, 0) : NULL;
    size_t entries_end         = list ? list->size : 0;
-   size_t columns             = mui->grid_columns;
    size_t selection;
    size_t old_selection;
 
@@ -10483,15 +10634,48 @@ static enum menu_action materialui_grid_navigate(
             selection++;
          break;
       case MENU_ACTION_UP:
-         if (selection >= columns)
-            selection -= columns;
-         break;
       case MENU_ACTION_DOWN:
-         if (selection + columns < entries_end)
-            selection += columns;
-         /* Last row shorter than this column: go to its end */
-         else if (selection / columns < (entries_end - 1) / columns)
-            selection = entries_end - 1;
+         {
+            size_t k;
+            bool down               = (action == MENU_ACTION_DOWN);
+            materialui_node_t *cur  = (materialui_node_t*)list->list[selection].userdata;
+            float row_y             = 0.0f;
+            bool row_found          = false;
+            float best_dx           = 0.0f;
+
+            if (!cur)
+               break;
+
+            /* Row above/below: nearest y on that side */
+            for (k = 0; k < entries_end; k++)
+            {
+               materialui_node_t *n = (materialui_node_t*)list->list[k].userdata;
+               if (!n || (down ? n->y <= cur->y : n->y >= cur->y))
+                  continue;
+               if (!row_found || (down ? n->y < row_y : n->y > row_y))
+               {
+                  row_y     = n->y;
+                  row_found = true;
+               }
+            }
+            if (!row_found)
+               break;
+
+            /* Nearest cell in that row */
+            for (k = 0; k < entries_end; k++)
+            {
+               materialui_node_t *n = (materialui_node_t*)list->list[k].userdata;
+               float dx;
+               if (!n || n->y != row_y)
+                  continue;
+               dx = (n->x > cur->x) ? n->x - cur->x : cur->x - n->x;
+               if (selection == old_selection || dx < best_dx)
+               {
+                  selection = k;
+                  best_dx   = dx;
+               }
+            }
+         }
          break;
       default:
          break;

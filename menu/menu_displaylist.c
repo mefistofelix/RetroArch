@@ -2484,6 +2484,15 @@ static unsigned menu_displaylist_parse_system_info(file_list_t *list)
    return count;
 }
 
+/* Entries listed first by playlist_recent_first in the last
+ * playlist shown (the grid view draws them as a section) */
+static size_t playlist_recent_count = 0;
+
+size_t menu_displaylist_playlist_recent_count(void)
+{
+   return playlist_recent_count;
+}
+
 static int menu_displaylist_parse_playlist(
       file_list_t *info_list,
       const char *info_path, playlist_t *playlist,
@@ -2504,7 +2513,10 @@ static int menu_displaylist_parse_playlist(
    void (*sanitization)(char*)       = NULL;
    unsigned count                    = 0;
    size_t *order                     = NULL;
+   size_t n_recent                   = 0;
    size_t pos;
+
+   playlist_recent_count = 0;
 
    if (list_size == 0)
       return 0;
@@ -2551,6 +2563,7 @@ static int menu_displaylist_parse_playlist(
             }
          }
 
+         n_recent = n;
          for (k = 0; k < list_size; k++)
             if (!taken[k])
                order[n++] = k;
@@ -2730,7 +2743,11 @@ static int menu_displaylist_parse_playlist(
       if (entry_valid && menu_entries_append(info_list,
             menu_entry_lbl, entry_path,
             MENU_ENUM_LABEL_PLAYLIST_ENTRY, FILE_TYPE_RPL_ENTRY, 0, i, NULL))
+      {
          count++;
+         if (pos < n_recent)
+            playlist_recent_count = count;
+      }
    }
 
    free(order);

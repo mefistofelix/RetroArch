@@ -313,6 +313,7 @@ typedef struct settings
       unsigned menu_materialui_thumbnail_view_portrait;
       unsigned menu_materialui_thumbnail_view_landscape;
       unsigned menu_materialui_grid_show_time;
+      unsigned menu_materialui_grid_columns;
       unsigned menu_materialui_grid_fade_time;
       unsigned menu_materialui_landscape_layout_optimization;
       unsigned menu_ozone_color_theme;
