@@ -2501,6 +2501,24 @@ size_t menu_displaylist_playlist_actions_count(void)
    return playlist_actions_count;
 }
 
+/* Set when the start-up playlist is opened: the menu driver then
+ * selects the first game (once) when it shows the list */
+static bool startup_selection_pending = false;
+
+void menu_displaylist_set_startup_selection(void)
+{
+   startup_selection_pending = true;
+}
+
+bool menu_displaylist_take_startup_selection(void)
+{
+   bool pending              = startup_selection_pending
+         && playlist_actions_count > 0;
+   if (playlist_actions_count > 0)
+      startup_selection_pending = false;
+   return pending;
+}
+
 static int menu_displaylist_parse_playlist(
       file_list_t *info_list,
       const char *info_path, playlist_t *playlist,

@@ -5177,7 +5177,7 @@ static void materialui_compute_entries_box_playlist_grid(
    float node_x               = (float)mui->landscape_optimization.border_width;
    float title_h              = materialui_grid_section_title_height(mui);
    float action_h             = (float)mui->icon_size + (float)mui->margin * 2.0f;
-   float action_w             = list_width / (float)(columns * 2);
+   float action_w             = list_width / (float)columns;
    float recent_h             = 0.0f;
    float top                  = 0.0f;
    size_t games;
@@ -5405,8 +5405,9 @@ static void materialui_render_menu_entry_playlist_grid(
    {
       float icon_color[16];
       float size  = (float)mui->icon_size * 0.6f;
-      const char *label = !string_is_empty(entry->rich_label)
-            ? entry->rich_label : entry->path;
+      const char *label = (entry->enum_idx == MENU_ENUM_LABEL_INPUT_SETTINGS)
+            ? msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SETTINGS)
+            : (!string_is_empty(entry->rich_label) ? entry->rich_label : entry->path);
       uint32_t color    = ((entry_selected ? mui->colors.list_text_highlighted
                : mui->colors.list_text) & 0xFFFFFF00) | text_alpha;
 
@@ -10167,9 +10168,10 @@ static void materialui_populate_entries(void *data, const char *path,
 
    /* If this is a *valid* playlist, then cache it
     * Note: Empty playlists have a 'no entries available'
-    * message as the first item - thus a playlist is
-    * valid if the first item is of the correct
-    * FILE_TYPE_RPL_ENTRY type */
+    * message as the only item - thus a playlist is
+    * valid if the last item is of the correct
+    * FILE_TYPE_RPL_ENTRY type (the first ones can be
+    * menu actions, see menu_startup_playlist) */
    mui->playlist = NULL;
    if (mui->flags & MUI_FLAG_IS_PLAYLIST)
    {
@@ -10180,7 +10182,7 @@ static void materialui_populate_entries(void *data, const char *path,
 
       if (   (list)
           && (list_size > 0)
-          && (list->list[0].type == FILE_TYPE_RPL_ENTRY))
+          && (list->list[list_size - 1].type == FILE_TYPE_RPL_ENTRY))
          mui->playlist = playlist_get_cached();
    }
 
@@ -10236,6 +10238,10 @@ static void materialui_populate_entries(void *data, const char *path,
             || remember_selection == MENU_REMEMBER_SELECTION_MAIN)
          menu_state_get_ptr()->selection_ptr = mui->settings_selection_ptr;
    }
+
+   /* Start-up playlist: the first game is selected, not the actions */
+   if (menu_displaylist_take_startup_selection())
+      menu_state_get_ptr()->selection_ptr = menu_displaylist_playlist_actions_count();
 
    if (     settings->bools.savestate_thumbnail_enable
          && (  string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_SAVESTATE_LIST))
