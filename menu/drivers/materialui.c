@@ -5308,6 +5308,8 @@ static void materialui_grid_icons_unload(materialui_handle_t *mui)
  * cell, after a short wait, cross-fades to the box art (primary) and
  * back, in turn (materialui_grid_show_time / _fade_time, ms). Returns
  * the box art opacity the selected cell aims at, at 'now' */
+static void materialui_navigation_set(void *data, bool scroll);
+
 #define MUI_GRID_SELECT_WAIT 1000.0f
 /* Grid: image loads in flight at most */
 #define MUI_GRID_MAX_LOADS 3
@@ -6910,8 +6912,6 @@ enum
    MUI_GRID_ITEM_SETTINGS,
    MUI_GRID_ITEM_QUIT
 };
-
-static void materialui_navigation_set(void *data, bool scroll);
 
 /* Side menu items: 'show all' only while a search filter is set */
 static unsigned materialui_grid_menu_items(int *items)
