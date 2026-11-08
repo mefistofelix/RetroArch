@@ -2484,39 +2484,14 @@ static unsigned menu_displaylist_parse_system_info(file_list_t *list)
    return count;
 }
 
-/* Layout of the last playlist shown, for the grid view:
- * first the action entries (only on the menu_startup_playlist),
- * then the recently played entries (playlist_recent_first), then
- * every entry of the playlist */
-static size_t playlist_actions_count = 0;
-static size_t playlist_recent_count  = 0;
+/* Layout of the last playlist shown, for the grid view: the
+ * recently played entries (playlist_recent_first), then every
+ * entry of the playlist */
+static size_t playlist_recent_count = 0;
 
 size_t menu_displaylist_playlist_recent_count(void)
 {
    return playlist_recent_count;
-}
-
-size_t menu_displaylist_playlist_actions_count(void)
-{
-   return playlist_actions_count;
-}
-
-/* Set when the start-up playlist is opened: the menu driver then
- * selects the first game (once) when it shows the list */
-static bool startup_selection_pending = false;
-
-void menu_displaylist_set_startup_selection(void)
-{
-   startup_selection_pending = true;
-}
-
-bool menu_displaylist_take_startup_selection(void)
-{
-   bool pending              = startup_selection_pending
-         && playlist_actions_count > 0;
-   if (playlist_actions_count > 0)
-      startup_selection_pending = false;
-   return pending;
 }
 
 static int menu_displaylist_parse_playlist(
@@ -2543,36 +2518,10 @@ static int menu_displaylist_parse_playlist(
    size_t n_order                    = list_size;
    size_t pos;
 
-   playlist_recent_count  = 0;
-   playlist_actions_count = 0;
+   playlist_recent_count = 0;
 
    if (list_size == 0)
       return 0;
-
-   /* The playlist opened at start-up (menu_startup_playlist) is the
-    * home screen: it starts with the menu's own actions, so that no
-    * other screen is needed */
-   if (     is_collection
-         && !search_terms
-         && !string_is_empty(settings->arrays.menu_startup_playlist)
-         && !string_is_empty(info_path)
-         && string_is_equal(path_basename(info_path),
-            settings->arrays.menu_startup_playlist))
-   {
-      if (menu_entries_append(info_list,
-            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SETTINGS),
-            msg_hash_to_str(MENU_ENUM_LABEL_INPUT_SETTINGS),
-            MENU_ENUM_LABEL_INPUT_SETTINGS,
-            MENU_SETTING_ACTION, 0, 0, NULL))
-         playlist_actions_count++;
-      if (menu_entries_append(info_list,
-            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QUIT_RETROARCH),
-            msg_hash_to_str(MENU_ENUM_LABEL_QUIT_RETROARCH),
-            MENU_ENUM_LABEL_QUIT_RETROARCH,
-            MENU_SETTING_ACTION, 0, 0, NULL))
-         playlist_actions_count++;
-      count = (unsigned)playlist_actions_count;
-   }
 
    /* playlist_recent_first: content that is in the content history
     * comes first, most recently played first, then the whole playlist

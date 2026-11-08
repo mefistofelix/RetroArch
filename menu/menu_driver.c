@@ -8176,14 +8176,9 @@ bool menu_driver_iterate(
             settings->arrays.menu_startup_playlist,
             sizeof(playlist_path));
       if (path_is_valid(playlist_path))
-      {
-         /* The menu driver selects the first game, after the
-          * action entries, once the list is built */
-         menu_displaylist_set_startup_selection();
          generic_action_ok_displaylist_push(playlist_path, NULL, "",
                FILE_TYPE_PLAYLIST_COLLECTION, 0, 0,
                ACTION_OK_DL_PLAYLIST_COLLECTION);
-      }
    }
 
    return ( menu_st->driver_data

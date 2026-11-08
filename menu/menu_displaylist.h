@@ -355,10 +355,6 @@ typedef struct menu_displaylist_info
 
 /* Entries listed first by playlist_recent_first in the last playlist shown */
 size_t menu_displaylist_playlist_recent_count(void);
-/* Action entries at the top of the start-up playlist */
-size_t menu_displaylist_playlist_actions_count(void);
-void menu_displaylist_set_startup_selection(void);
-bool menu_displaylist_take_startup_selection(void);
 
 bool menu_displaylist_process(menu_displaylist_info_t *info);
 
