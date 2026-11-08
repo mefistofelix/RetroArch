@@ -6922,6 +6922,7 @@ static void materialui_render_grid_menu(materialui_handle_t *mui,
    float icon_color[16];
    unsigned textures[MUI_GRID_MENU_SIZE];
    enum msg_hash_enums labels[MUI_GRID_MENU_SIZE];
+   char label_buf[256];
    gfx_display_t *p_disp = disp_get_ptr();
    float panel_w         = (float)video_width * 0.3f;
    float panel_x         = mui->grid_menu_right ? (float)video_width - panel_w : 0.0f;
@@ -6971,7 +6972,16 @@ static void materialui_render_grid_menu(materialui_handle_t *mui,
             mui->icon_size, mui->textures.list[textures[i]],
             panel_x + (float)mui->margin, y + (item_h - (float)mui->icon_size) / 2.0f,
             0, 1, icon_color, &mymat);
-      gfx_display_draw_text(mui->font_data.list.font, msg_hash_to_str(labels[i]),
+      /* Search: with the current filter, if any */
+      if (i == 0 && menu_entries_search_get_terms())
+      {
+         menu_search_terms_t *terms = menu_entries_search_get_terms();
+         snprintf(label_buf, sizeof(label_buf), "%s: %s",
+               msg_hash_to_str(labels[i]), terms->terms[terms->size - 1]);
+      }
+      else
+         strlcpy(label_buf, msg_hash_to_str(labels[i]), sizeof(label_buf));
+      gfx_display_draw_text(mui->font_data.list.font, label_buf,
             panel_x + (float)mui->margin * 2.0f + (float)mui->icon_size,
             y + item_h / 2.0f + (float)mui->font_data.list.line_centre_offset,
             video_width, video_height, 0xFFFFFFFF,
@@ -10942,6 +10952,17 @@ static enum menu_action materialui_parse_menu_entry_action(
       }
       if (action == MENU_ACTION_CANCEL)
       {
+         /* With a search filter, Back shows every game again */
+         if (menu_entries_search_get_terms())
+         {
+            struct menu_state *menu_st = menu_state_get_ptr();
+            while (menu_entries_search_pop()) { }
+            menu_st->selection_ptr = 0;
+            materialui_navigation_set(mui, false);
+            menu_st->flags |= MENU_ST_FLAG_PREVENT_POPULATE
+                            | MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+            return MENU_ACTION_NOOP;
+         }
          mui->grid_menu       = 0;
          mui->grid_menu_right = false;
          return MENU_ACTION_NOOP;

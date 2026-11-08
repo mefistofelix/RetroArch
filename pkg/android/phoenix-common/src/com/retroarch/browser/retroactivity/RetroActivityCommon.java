@@ -5,6 +5,13 @@ import com.retroarch.browser.preferences.util.UserPreferences;
 import com.retroarch.playcore.PlayCoreManager;
 
 import android.annotation.TargetApi;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.text.InputType;
+import android.view.KeyEvent;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
+import android.widget.TextView;
 import android.app.NativeActivity;
 import android.content.res.Configuration;
 import android.content.Context;
@@ -538,6 +545,67 @@ public class RetroActivityCommon extends NativeActivity
    * Called when the user grants access to a Storage Access Framework tree.
    */
   public native void safTreeAdded(String tree);
+
+  /**
+   * Called with the text of the native text input dialog, or null if it was cancelled.
+   */
+  public native void textInputDone(String text);
+
+  /**
+   * Native text input (input_android_native_keyboard): a dialog with a text field, so the
+   * system keyboard comes up, voice dictation included (Fire TV remote microphone).
+   */
+  public void showTextInput(final String title, final String text)
+  {
+    runOnUiThread(new Runnable() {
+      public void run() {
+        final boolean[] done = { false };
+        final EditText edit  = new EditText(RetroActivityCommon.this);
+        edit.setSingleLine(true);
+        edit.setInputType(InputType.TYPE_CLASS_TEXT);
+        edit.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+        edit.setText(text);
+        edit.setSelectAllOnFocus(true);
+
+        final AlertDialog dialog = new AlertDialog.Builder(RetroActivityCommon.this)
+          .setTitle(title)
+          .setView(edit)
+          .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface d, int which) {
+              if (!done[0]) { done[0] = true; textInputDone(edit.getText().toString()); }
+            }
+          })
+          .setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface d, int which) {
+              if (!done[0]) { done[0] = true; textInputDone(null); }
+            }
+          })
+          .setOnCancelListener(new DialogInterface.OnCancelListener() {
+            public void onCancel(DialogInterface d) {
+              if (!done[0]) { done[0] = true; textInputDone(null); }
+            }
+          })
+          .create();
+
+        edit.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+          public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+            if (     actionId == EditorInfo.IME_ACTION_SEARCH
+                  || actionId == EditorInfo.IME_ACTION_DONE
+                  || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                        && event.getAction() == KeyEvent.ACTION_DOWN)) {
+              if (!done[0]) { done[0] = true; textInputDone(edit.getText().toString()); }
+              dialog.dismiss();
+              return true;
+            }
+            return false;
+          }
+        });
+        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        dialog.show();
+        edit.requestFocus();
+      }
+    });
+  }
 
 
 

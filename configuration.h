@@ -913,6 +913,7 @@ typedef struct settings
       bool quick_menu_show_core_options_flush;
       bool quick_menu_show_controls;
       bool quick_menu_show_disk_control;
+      bool input_android_native_keyboard;
       bool quick_menu_show_cheats;
       bool quick_menu_show_shaders;
       bool quick_menu_show_save_core_overrides;

@@ -61,6 +61,9 @@
 /* This file has a UTF8 BOM, we assume HAVE_LANGEXTRA
  * is only enabled for compilers that can support this. */
 #include "../input/input_osk_utf8_pages.h"
+#ifdef ANDROID
+#include "../frontend/drivers/platform_unix.h"
+#endif
 #endif
 
 #ifdef HAVE_CHEEVOS
@@ -4210,6 +4213,48 @@ end:
    menu_input_dialog_end();
 }
 
+#ifdef ANDROID
+/* Native text input (input_android_native_keyboard): the text replaces
+ * the search filter, an empty text removes it */
+static void menu_input_search_native_cb(const char *str)
+{
+   const char *label           = NULL;
+   unsigned type               = MENU_SETTINGS_NONE;
+   struct menu_state *menu_st  = &menu_driver_state;
+   const file_list_t *list     = MENU_LIST_GET(menu_st->entries.list, 0);
+
+   if (!str)
+      return;
+   if (list && list->size)
+   {
+      label     = list->list[list->size - 1].label;
+      type      = list->list[list->size - 1].type;
+   }
+
+   if (menu_driver_search_filter_enabled(label, type))
+   {
+      while (menu_entries_search_pop()) { }
+      if (!string_is_empty(str))
+         menu_entries_search_push(str);
+      menu_st->selection_ptr     = 0;
+      if (menu_st->driver_ctx->navigation_set)
+         menu_st->driver_ctx->navigation_set(menu_st->userdata, false);
+      menu_st->flags            |=  MENU_ST_FLAG_PREVENT_POPULATE
+                                 |  MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+   }
+   else
+   {
+      size_t idx = 0;
+      if (!string_is_empty(str) && menu_entries_list_search(str, &idx))
+      {
+         menu_st->selection_ptr = idx;
+         if (menu_st->driver_ctx->navigation_set)
+            menu_st->driver_ctx->navigation_set(menu_st->userdata, true);
+      }
+   }
+}
+#endif
+
 int menu_entry_action(menu_entry_t *entry, size_t i, enum menu_action action)
 {
    struct menu_state *menu_st     = &menu_driver_state;
@@ -8206,6 +8251,20 @@ bool menu_input_dialog_start_search(void)
 
    if (!menu || settings->bools.menu_disable_search_button)
       return false;
+
+#ifdef ANDROID
+   /* System keyboard (and voice dictation) instead of the on-screen
+    * keyboard, starting from the current search */
+   if (settings->bools.input_android_native_keyboard)
+   {
+      menu_search_terms_t *terms = menu_entries_search_get_terms();
+      if (android_text_input_start(
+               msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH),
+               terms ? terms->terms[terms->size - 1] : "",
+               menu_input_search_native_cb))
+         return true;
+   }
+#endif
 
 #ifdef HAVE_MIST
    steam_open_osk();

@@ -1704,6 +1704,9 @@ static void android_input_poll(void *data)
          return;
       }
    }
+
+   /* Text from the native text input dialog, if any */
+   android_text_input_poll();
 }
 
 bool android_run_events(void *data)

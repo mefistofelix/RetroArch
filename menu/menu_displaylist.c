@@ -2488,6 +2488,13 @@ static unsigned menu_displaylist_parse_system_info(file_list_t *list)
  * recently played entries (playlist_recent_first), then every
  * entry of the playlist */
 static size_t playlist_recent_count = 0;
+/* Entries shown last time (playlist index of each menu entry), so
+ * that the selected entry is found again when the order changes
+ * (e.g. after playing a game, which moves it to the top) */
+static char playlist_shown_path[PATH_MAX_LENGTH];
+static size_t *playlist_shown     = NULL;
+static size_t playlist_shown_size = 0;
+static size_t playlist_shown_recent = 0;
 
 size_t menu_displaylist_playlist_recent_count(void)
 {
@@ -2516,6 +2523,12 @@ static int menu_displaylist_parse_playlist(
    size_t *order                     = NULL;
    size_t n_recent                   = 0;
    size_t n_order                    = list_size;
+   size_t *shown                     = NULL;
+   size_t old_sel                    = menu_st->selection_ptr;
+   size_t target                     = 0;
+   bool target_recent                = false;
+   bool have_target                  = false;
+   const char *pl_path               = playlist_get_conf_path(playlist);
    size_t pos;
 
    playlist_recent_count = 0;
@@ -2572,6 +2585,18 @@ static int menu_displaylist_parse_playlist(
          n_order = n;
 
          free(taken);
+
+         /* The entry selected in this playlist before, and its section */
+         if (     playlist_shown
+               && !string_is_empty(pl_path)
+               && string_is_equal(pl_path, playlist_shown_path)
+               && old_sel < playlist_shown_size)
+         {
+            target        = playlist_shown[old_sel];
+            target_recent = (old_sel < playlist_shown_recent);
+            have_target   = true;
+         }
+         shown = (size_t*)malloc(n_order * sizeof(size_t));
       }
       else
       {
@@ -2747,10 +2772,43 @@ static int menu_displaylist_parse_playlist(
             menu_entry_lbl, entry_path,
             MENU_ENUM_LABEL_PLAYLIST_ENTRY, FILE_TYPE_RPL_ENTRY, 0, i, NULL))
       {
+         if (shown)
+            shown[count] = i;
          count++;
          if (pos < n_recent)
             playlist_recent_count++;
       }
+   }
+
+   if (shown)
+   {
+      /* Select the same entry again, in the same section if it is
+       * still there (a game played from the recent ones is now the
+       * first of them, one played from the full list stays there) */
+      if (have_target)
+      {
+         size_t k, found = (size_t)-1;
+         for (k = 0; k < count; k++)
+         {
+            if (shown[k] != target)
+               continue;
+            if ((k < playlist_recent_count) == target_recent)
+            {
+               found = k;
+               break;
+            }
+            if (found == (size_t)-1)
+               found = k;
+         }
+         if (found != (size_t)-1)
+            menu_st->selection_ptr = found;
+      }
+      free(playlist_shown);
+      playlist_shown        = shown;
+      playlist_shown_size   = count;
+      playlist_shown_recent = playlist_recent_count;
+      strlcpy(playlist_shown_path, pl_path ? pl_path : "",
+            sizeof(playlist_shown_path));
    }
 
    free(order);

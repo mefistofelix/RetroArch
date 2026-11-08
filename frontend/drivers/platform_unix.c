@@ -628,6 +628,71 @@ void android_show_saf_tree_picker(void)
 }
 #endif
 
+/* Native text input: the Java dialog hands the text over from the UI
+ * thread, the main thread picks it up in android_text_input_poll() */
+static android_text_input_cb_t android_text_input_cb = NULL;
+static char android_text_input_text[1024];
+static volatile int android_text_input_state = 0; /* 1 = text, 2 = cancelled */
+
+bool android_text_input_start(const char *title, const char *text,
+      android_text_input_cb_t cb)
+{
+   JNIEnv *env = jni_thread_getenv();
+   jstring jtitle, jtext;
+
+   if (!env || !g_android || !g_android->showTextInput)
+      return false;
+
+   android_text_input_cb    = cb;
+   android_text_input_state = 0;
+   jtitle = (*env)->NewStringUTF(env, title ? title : "");
+   jtext  = (*env)->NewStringUTF(env, text  ? text  : "");
+   CALL_VOID_METHOD_PARAM(env, g_android->activity->clazz,
+         g_android->showTextInput, jtitle, jtext);
+   (*env)->DeleteLocalRef(env, jtitle);
+   (*env)->DeleteLocalRef(env, jtext);
+   return true;
+}
+
+void android_text_input_poll(void)
+{
+   android_text_input_cb_t cb;
+   int state = android_text_input_state;
+
+   if (!state)
+      return;
+   __sync_synchronize();
+   cb                       = android_text_input_cb;
+   android_text_input_cb    = NULL;
+   android_text_input_state = 0;
+   if (cb)
+      cb(state == 1 ? android_text_input_text : NULL);
+}
+
+/*
+ * Class:     com_retroarch_browser_retroactivity_RetroActivityCommon
+ * Method:    textInputDone
+ * Signature: (Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_com_retroarch_browser_retroactivity_RetroActivityCommon_textInputDone
+      (JNIEnv *env, jobject this_obj, jstring text_obj)
+{
+   int state = 2;
+
+   if (text_obj)
+   {
+      const char *text = (*env)->GetStringUTFChars(env, text_obj, NULL);
+      if (text)
+      {
+         strlcpy(android_text_input_text, text, sizeof(android_text_input_text));
+         (*env)->ReleaseStringUTFChars(env, text_obj, text);
+         state = 1;
+      }
+   }
+   __sync_synchronize();
+   android_text_input_state = state;
+}
+
 /*
  * Class:     com_retroarch_browser_retroactivity_RetroActivityCommon
  * Method:    safTreeAdded
@@ -2193,6 +2258,8 @@ static void frontend_unix_init(void *data)
          "isScreenReaderEnabled", "()Z");
    GET_METHOD_ID(env, android_app->accessibilitySpeak, class,
          "accessibilitySpeak", "(Ljava/lang/String;)V");
+   GET_METHOD_ID(env, android_app->showTextInput, class,
+         "showTextInput", "(Ljava/lang/String;Ljava/lang/String;)V");
 
    CALL_BOOLEAN_METHOD(env, android_app->is_play_store_build, android_app->activity->clazz, android_app->isPlayStoreBuild)
 

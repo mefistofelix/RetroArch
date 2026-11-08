@@ -182,6 +182,7 @@ struct android_app
 
    jmethodID isScreenReaderEnabled;
    jmethodID accessibilitySpeak;
+   jmethodID showTextInput;
 
    struct
    {
@@ -376,6 +377,15 @@ void android_app_write_cmd(struct android_app *android_app, int8_t cmd);
 extern struct android_app *g_android;
 
 bool is_screen_reader_enabled(void);
+
+/* Native text input (Android dialog with the system keyboard, which can
+ * also take voice dictation, e.g. the Fire TV remote's microphone).
+ * 'cb' is called on the main thread from android_text_input_poll(), with
+ * the text, or NULL if the dialog was cancelled */
+typedef void (*android_text_input_cb_t)(const char *text);
+bool android_text_input_start(const char *title, const char *text,
+      android_text_input_cb_t cb);
+void android_text_input_poll(void);
 
 #ifdef HAVE_SAF
 void android_show_saf_tree_picker(void);
