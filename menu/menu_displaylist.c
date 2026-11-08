@@ -2484,13 +2484,21 @@ static unsigned menu_displaylist_parse_system_info(file_list_t *list)
    return count;
 }
 
-/* Entries listed first by playlist_recent_first in the last
- * playlist shown (the grid view draws them as a section) */
-static size_t playlist_recent_count = 0;
+/* Layout of the last playlist shown, for the grid view:
+ * first the action entries (only on the menu_startup_playlist),
+ * then the recently played entries (playlist_recent_first), then
+ * every entry of the playlist */
+static size_t playlist_actions_count = 0;
+static size_t playlist_recent_count  = 0;
 
 size_t menu_displaylist_playlist_recent_count(void)
 {
    return playlist_recent_count;
+}
+
+size_t menu_displaylist_playlist_actions_count(void)
+{
+   return playlist_actions_count;
 }
 
 static int menu_displaylist_parse_playlist(
@@ -2514,21 +2522,49 @@ static int menu_displaylist_parse_playlist(
    unsigned count                    = 0;
    size_t *order                     = NULL;
    size_t n_recent                   = 0;
+   size_t n_order                    = list_size;
    size_t pos;
 
-   playlist_recent_count = 0;
+   playlist_recent_count  = 0;
+   playlist_actions_count = 0;
 
    if (list_size == 0)
       return 0;
 
+   /* The playlist opened at start-up (menu_startup_playlist) is the
+    * home screen: it starts with the menu's own actions, so that no
+    * other screen is needed */
+   if (     is_collection
+         && !search_terms
+         && !string_is_empty(settings->arrays.menu_startup_playlist)
+         && !string_is_empty(info_path)
+         && string_is_equal(path_basename(info_path),
+            settings->arrays.menu_startup_playlist))
+   {
+      if (menu_entries_append(info_list,
+            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SETTINGS),
+            msg_hash_to_str(MENU_ENUM_LABEL_INPUT_SETTINGS),
+            MENU_ENUM_LABEL_INPUT_SETTINGS,
+            MENU_SETTING_ACTION, 0, 0, NULL))
+         playlist_actions_count++;
+      if (menu_entries_append(info_list,
+            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QUIT_RETROARCH),
+            msg_hash_to_str(MENU_ENUM_LABEL_QUIT_RETROARCH),
+            MENU_ENUM_LABEL_QUIT_RETROARCH,
+            MENU_SETTING_ACTION, 0, 0, NULL))
+         playlist_actions_count++;
+      count = (unsigned)playlist_actions_count;
+   }
+
    /* playlist_recent_first: content that is in the content history
-    * comes first, most recently played first, then everything else in
-    * playlist order. Menu entries keep their playlist index (as with
-    * search), so launching and thumbnails are unaffected. */
+    * comes first, most recently played first, then the whole playlist
+    * in its order (recent entries included, so an entry is also found
+    * where it always is). Menu entries keep their playlist index (as
+    * with search), so launching and thumbnails are unaffected. */
    if (     is_collection
          && settings->bools.playlist_recent_first
          && g_defaults.content_history
-         && (order = (size_t*)malloc(list_size * sizeof(size_t))))
+         && (order = (size_t*)malloc(2 * list_size * sizeof(size_t))))
    {
       bool *taken = (bool*)calloc(list_size, sizeof(bool));
 
@@ -2565,8 +2601,8 @@ static int menu_displaylist_parse_playlist(
 
          n_recent = n;
          for (k = 0; k < list_size; k++)
-            if (!taken[k])
-               order[n++] = k;
+            order[n++] = k;
+         n_order = n;
 
          free(taken);
       }
@@ -2651,7 +2687,7 @@ static int menu_displaylist_parse_playlist(
          break;
    }
 
-   for (pos = 0; pos < list_size; pos++)
+   for (pos = 0; pos < n_order; pos++)
    {
       char menu_entry_lbl[NAME_MAX_LENGTH];
       const struct playlist_entry *entry = NULL;
@@ -2746,7 +2782,7 @@ static int menu_displaylist_parse_playlist(
       {
          count++;
          if (pos < n_recent)
-            playlist_recent_count = count;
+            playlist_recent_count++;
       }
    }
 

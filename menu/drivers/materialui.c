@@ -442,6 +442,7 @@ typedef struct
    } thumbnails;
    unsigned icon_texture_index;
    unsigned grid_icon;   /* grid view: index + 1 in mui->grid_icons, 0 = none yet */
+   bool grid_action;     /* grid view: a menu action, not a playlist entry */
    float entry_width;
    float entry_height;
    float text_height;
@@ -673,6 +674,7 @@ typedef struct materialui_handle
    unsigned thumbnail_width_max;
    unsigned grid_columns;   /* MUI_LIST_VIEW_PLAYLIST_THUMB_GRID */
    size_t grid_recent;      /* grid: entries in the 'recently played' section */
+   size_t grid_actions;     /* grid: menu actions in the top row */
    unsigned grid_icons_count;
    struct
    {
@@ -5165,6 +5167,7 @@ static void materialui_compute_entries_box_playlist_grid(
    file_list_t *list          = menu_list ? MENU_LIST_GET_SELECTION(menu_list, 0) : NULL;
    size_t entries_end         = list ? list->size : 0;
    size_t recent             = menu_displaylist_playlist_recent_count();
+   size_t actions            = menu_displaylist_playlist_actions_count();
    unsigned columns           = (mui->grid_columns > 0) ? mui->grid_columns : 1;
    float list_width           = (float)width -
          (float)(mui->landscape_optimization.border_width * 2) -
@@ -5173,29 +5176,55 @@ static void materialui_compute_entries_box_playlist_grid(
    float cell_height          = (float)mui->thumbnail_height_max + (float)mui->margin;
    float node_x               = (float)mui->landscape_optimization.border_width;
    float title_h              = materialui_grid_section_title_height(mui);
+   float action_h             = (float)mui->icon_size + (float)mui->margin * 2.0f;
+   float action_w             = list_width / (float)(columns * 2);
    float recent_h             = 0.0f;
+   float top                  = 0.0f;
+   size_t games;
 
    if (!list)
       return;
 
+   if (actions > entries_end)
+      actions = 0;
+   games = entries_end - actions;
+
    /* Sections only when there is something in both */
-   if (recent >= entries_end)
+   if (recent >= games)
       recent = 0;
+   if (actions > 0)
+      top = action_h;
    if (recent > 0)
       recent_h = title_h + (float)((recent + columns - 1) / columns) * cell_height;
-   mui->grid_recent = recent;
+   mui->grid_recent  = recent;
+   mui->grid_actions = actions;
 
    for (i = 0; i < entries_end; i++)
    {
       materialui_node_t *node = (materialui_node_t*)list->list[i].userdata;
-      size_t k                = (recent > 0 && i >= recent) ? i - recent : i;
-      float base_y            = 0.0f;
+      size_t g                = i - actions;
+      size_t k;
+      float base_y            = top;
 
       if (!node)
          continue;
 
+      /* Menu actions: one row of buttons at the top */
+      if (i < actions)
+      {
+         node->grid_action  = true;
+         node->text_height  = (float)mui->font_data.list.line_height;
+         node->entry_width  = action_w;
+         node->entry_height = action_h;
+         node->x            = node_x + (float)i * action_w;
+         node->y            = 0.0f;
+         continue;
+      }
+
+      node->grid_action = false;
+      k                 = (recent > 0 && g >= recent) ? g - recent : g;
       if (recent > 0)
-         base_y = (i < recent) ? title_h : recent_h + title_h;
+         base_y = top + ((g < recent) ? title_h : recent_h + title_h);
 
       node->text_height  = (float)mui->font_data.list.line_height;
       node->entry_width  = cell_width;
@@ -5204,8 +5233,8 @@ static void materialui_compute_entries_box_playlist_grid(
       node->y            = base_y + (float)(k / columns) * cell_height;
    }
 
-   mui->content_height = (recent > 0 ? recent_h + title_h : 0.0f)
-         + (float)(((entries_end - recent) + columns - 1) / columns) * cell_height;
+   mui->content_height = top + (recent > 0 ? recent_h + title_h : 0.0f)
+         + (float)(((games - recent) + columns - 1) / columns) * cell_height;
 
    /* Total height is now known - can initialise scrollbar */
    materialui_scrollbar_init(mui, width, height, header_height);
@@ -5225,11 +5254,13 @@ static void materialui_render_grid_section_titles(
    uint32_t color = (mui->colors.list_text & 0xFFFFFF00)
          | (uint32_t)(255.0f * mui->transition_alpha);
 
-   if (!list || mui->grid_recent == 0 || mui->grid_recent >= list->size)
+   if (     !list
+         || mui->grid_recent == 0
+         || mui->grid_actions + mui->grid_recent >= list->size)
       return;
 
-   starts[0] = 0;
-   starts[1] = mui->grid_recent;
+   starts[0] = mui->grid_actions;
+   starts[1] = mui->grid_actions + mui->grid_recent;
    titles[0] = MENU_ENUM_LABEL_VALUE_MATERIALUI_GRID_RECENT;
    titles[1] = MENU_ENUM_LABEL_VALUE_MATERIALUI_GRID_ALL;
 
@@ -5369,8 +5400,47 @@ static void materialui_render_menu_entry_playlist_grid(
       gfx_display_rotate_z(p_disp, &mymat, cosine, sine, userdata);
    }
 
-   /* Thumbnails: when both are there, cross-fade */
-   if (prim_ok && sec_ok)
+   /* Menu action: icon and label, centred */
+   if (node->grid_action)
+   {
+      float icon_color[16];
+      float size  = (float)mui->icon_size * 0.6f;
+      const char *label = !string_is_empty(entry->rich_label)
+            ? entry->rich_label : entry->path;
+      uint32_t color    = ((entry_selected ? mui->colors.list_text_highlighted
+               : mui->colors.list_text) & 0xFFFFFF00) | text_alpha;
+
+      for (i = 0; i < 16; i += 4)
+      {
+         icon_color[i + 0] = 1.0f;
+         icon_color[i + 1] = 1.0f;
+         icon_color[i + 2] = 1.0f;
+         icon_color[i + 3] = mui->transition_alpha;
+      }
+      if (node->icon_type == MUI_ICON_TYPE_INTERNAL)
+         materialui_draw_icon(userdata, p_disp, video_width, video_height,
+               (unsigned)size, mui->textures.list[node->icon_texture_index],
+               entry_x + (float)mui->margin,
+               entry_y + (node->entry_height - size) / 2.0f,
+               0.0f, 1.0f, icon_color, &mymat);
+      if (!string_is_empty(label))
+         gfx_display_draw_text(mui->font_data.list.font, label,
+               entry_x + (float)mui->margin * 2.0f + size,
+               entry_y + node->entry_height / 2.0f
+               + (float)mui->font_data.list.line_centre_offset,
+               video_width, video_height, color,
+               TEXT_ALIGN_LEFT, 1.0f, false, 0.0f, (x_offset != 0));
+      return;
+   }
+
+   /* Thumbnails: the in-game screenshot (secondary) stays still; the
+    * selected cell cross-fades between the two pictures */
+   if (prim_ok && sec_ok && !entry_selected)
+      gfx_thumbnail_draw(userdata, video_width, video_height, sec,
+            thumb_x, thumb_y, (unsigned)thumb_w, (unsigned)thumb_h,
+            GFX_THUMBNAIL_ALIGN_CENTRE,
+            mui->transition_alpha, 1.0f, NULL);
+   else if (prim_ok && sec_ok)
    {
       float a = materialui_grid_primary_alpha(cell_idx);
 
@@ -5494,6 +5564,9 @@ static bool materialui_render_process_entry_playlist_grid(
       unsigned thumbnail_upscale_threshold,
       bool network_on_demand_thumbnails)
 {
+   if (node->grid_action)
+      return true;
+
    materialui_render_process_entry_playlist_dual_icon(mui, menu_st, node,
          entry_idx, selection, playlist_idx, first_entry_found, last_entry_found,
          thumbnail_upscale_threshold, network_on_demand_thumbnails);

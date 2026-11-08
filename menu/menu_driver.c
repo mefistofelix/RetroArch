@@ -8175,9 +8175,15 @@ bool menu_driver_iterate(
             settings->arrays.menu_startup_playlist,
             sizeof(playlist_path));
       if (path_is_valid(playlist_path))
+      {
          generic_action_ok_displaylist_push(playlist_path, NULL, "",
                FILE_TYPE_PLAYLIST_COLLECTION, 0, 0,
                ACTION_OK_DL_PLAYLIST_COLLECTION);
+         /* Select the first game, after the action entries */
+         menu_st->selection_ptr = menu_displaylist_playlist_actions_count();
+         if (menu_st->driver_ctx && menu_st->driver_ctx->navigation_set)
+            menu_st->driver_ctx->navigation_set(menu_st->userdata, false);
+      }
    }
 
    return ( menu_st->driver_data
