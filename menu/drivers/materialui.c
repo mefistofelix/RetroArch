@@ -12774,6 +12774,7 @@ static void materialui_list_insert(void *userdata,
                   || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_VIDEO_SHADER_PRESET_REMOVE_GAME))
                   || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_CHEAT_DELETE))
                   || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_CHEAT_DELETE_ALL))
+                  || string_is_equal(label, msg_hash_to_str(MENU_ENUM_LABEL_DELETE_AUTO_STATE))
                   )
             {
                node->icon_texture_index = MUI_TEXTURE_REMOVE;
