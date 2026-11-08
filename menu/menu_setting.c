@@ -4553,6 +4553,10 @@ static size_t setting_get_string_representation_uint_materialui_menu_thumbnail_v
             return strlcpy(s,
                   msg_hash_to_str(
                      MENU_ENUM_LABEL_VALUE_MATERIALUI_THUMBNAIL_VIEW_PORTRAIT_DUAL_ICON), len);
+         case MATERIALUI_THUMBNAIL_VIEW_PORTRAIT_GRID:
+            return strlcpy(s,
+                  msg_hash_to_str(
+                     MENU_ENUM_LABEL_VALUE_MATERIALUI_THUMBNAIL_VIEW_GRID), len);
          default:
             break;
       }
@@ -4587,6 +4591,10 @@ static size_t setting_get_string_representation_uint_materialui_menu_thumbnail_v
             return strlcpy(s,
                   msg_hash_to_str(
                      MENU_ENUM_LABEL_VALUE_MATERIALUI_THUMBNAIL_VIEW_LANDSCAPE_DESKTOP), len);
+         case MATERIALUI_THUMBNAIL_VIEW_LANDSCAPE_GRID:
+            return strlcpy(s,
+                  msg_hash_to_str(
+                     MENU_ENUM_LABEL_VALUE_MATERIALUI_THUMBNAIL_VIEW_GRID), len);
          default:
             break;
       }
