@@ -82,7 +82,7 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 | Feature | Status |
 |---|---|
 | Actions build: only the Fire TV APK (armeabi-v7a), assets bundled, rolling release | done |
-| Stable signing key (in-place updates) | waiting for the repo secrets `RELEASE_KEYSTORE_B64` and `RELEASE_KEYSTORE_PASSWORD` |
+| Stable signing key (in-place updates) | done: secrets `RELEASE_KEYSTORE_B64` / `RELEASE_KEYSTORE_PASSWORD`, APK signed `CN=RetroFire` |
 | External config + tokens | works on the Fire TV 4K Max (8 Nov 2026) |
 | Cores copied from the stick | works: 12 cores in about 5 s on the first start, a game starts with them |
 | Keyboard `auto` | works: the Logitech USB keyboard drives the menu, no "fallback" pad |
@@ -90,7 +90,7 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 | Start on a playlist | to do |
 | Fire TV remote no longer resets the pad ports when it is used | to do |
 | Device reservation: a pad moved to its reserved port loses its buttons | to investigate |
-| RetroFire PC tools (`rf`) write the new stick layout and install the APK | to do |
+| RetroFire PC tools (`rf install`, `rf cores`, `rf push`) write the stick layout and install the APK | done, in use on the Fire TV 4K Max since 8 Nov 2026 |
 
 ## To do later
 
