@@ -141,6 +141,10 @@
  * (when thumbnails are enabled) */
 #define DEFAULT_MATERIALUI_THUMBNAIL_VIEW_PORTRAIT MATERIALUI_THUMBNAIL_VIEW_PORTRAIT_LIST_SMALL
 #define DEFAULT_MATERIALUI_THUMBNAIL_VIEW_LANDSCAPE MATERIALUI_THUMBNAIL_VIEW_LANDSCAPE_LIST_MEDIUM
+/* Grid view: each picture stays this long (ms), then
+ * cross-fades into the other one in this time (ms) */
+#define DEFAULT_MATERIALUI_GRID_SHOW_TIME 6000
+#define DEFAULT_MATERIALUI_GRID_FADE_TIME 2000
 
 /* Enable second thumbnail when using 'list view'
  * thumbnail views

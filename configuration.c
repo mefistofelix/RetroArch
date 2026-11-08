@@ -2462,6 +2462,8 @@ static struct config_uint_setting *populate_settings_uint(
    SETTING_UINT("materialui_menu_transition_animation",     &settings->uints.menu_materialui_transition_animation, true, DEFAULT_MATERIALUI_TRANSITION_ANIM, false);
    SETTING_UINT("materialui_thumbnail_view_portrait",       &settings->uints.menu_materialui_thumbnail_view_portrait, true, DEFAULT_MATERIALUI_THUMBNAIL_VIEW_PORTRAIT, false);
    SETTING_UINT("materialui_thumbnail_view_landscape",      &settings->uints.menu_materialui_thumbnail_view_landscape, true, DEFAULT_MATERIALUI_THUMBNAIL_VIEW_LANDSCAPE, false);
+   SETTING_UINT("materialui_grid_show_time",                &settings->uints.menu_materialui_grid_show_time, true, DEFAULT_MATERIALUI_GRID_SHOW_TIME, false);
+   SETTING_UINT("materialui_grid_fade_time",                &settings->uints.menu_materialui_grid_fade_time, true, DEFAULT_MATERIALUI_GRID_FADE_TIME, false);
    SETTING_UINT("materialui_landscape_layout_optimization", &settings->uints.menu_materialui_landscape_layout_optimization, true, DEFAULT_MATERIALUI_LANDSCAPE_LAYOUT_OPTIMIZATION, false);
 #endif
 #ifdef HAVE_OZONE

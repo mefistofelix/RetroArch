@@ -73,6 +73,8 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 | Option | Values | What it does |
 |---|---|---|
 | `materialui_thumbnail_view_landscape` / `_portrait` | `5` / `4` = Grid (new) | MaterialUI playlists as a grid of pictures, see below |
+| `materialui_grid_show_time` | ms, default `6000` | Grid: how long each picture stays |
+| `materialui_grid_fade_time` | ms, default `2000` | Grid: how long the cross-fade between the two pictures takes |
 | `input_android_physical_keyboard` | `auto` (new) | every full (alphabetic) keyboard is a keyboard, whatever its name; gamepads and remotes are not. The upstream values (one device name, or `vvvv:pppp Name`) still work |
 
 ## Development status

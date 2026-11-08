@@ -5179,29 +5179,36 @@ static void materialui_compute_entries_box_playlist_grid(
 }
 
 /* Grid cells show the primary and secondary
- * thumbnails in turn, cross-fading between them.
+ * thumbnails in turn, cross-fading between them
+ * (materialui_grid_show_time / _fade_time, ms).
  * Returns the opacity of the primary thumbnail
  * of cell 'idx' at the current time */
-#define MUI_GRID_SHOW_TIME 3000.0f
-#define MUI_GRID_FADE_TIME 600.0f
 static float materialui_grid_primary_alpha(size_t idx)
 {
-   float period = 2.0f * (MUI_GRID_SHOW_TIME + MUI_GRID_FADE_TIME);
+   settings_t *settings = config_get_ptr();
+   float show           = (float)settings->uints.menu_materialui_grid_show_time;
+   float fade           = (float)settings->uints.menu_materialui_grid_fade_time;
+   float period         = 2.0f * (show + fade);
+   float t;
+
+   if (period <= 0.0f)
+      return 1.0f;
+
    /* Offset each cell a little, so they do
     * not all change at the same time */
-   float t      = fmodf((float)(menu_driver_get_current_time() / 1000)
-         + (float)(idx % 7) * 450.0f, period);
+   t = fmodf((float)(menu_driver_get_current_time() / 1000)
+         + (float)(idx % 7) * (period / 7.0f), period);
 
-   if (t < MUI_GRID_SHOW_TIME)
+   if (t < show)
       return 1.0f;
-   t -= MUI_GRID_SHOW_TIME;
-   if (t < MUI_GRID_FADE_TIME)
-      return 1.0f - t / MUI_GRID_FADE_TIME;
-   t -= MUI_GRID_FADE_TIME;
-   if (t < MUI_GRID_SHOW_TIME)
+   t -= show;
+   if (t < fade)
+      return 1.0f - t / fade;
+   t -= fade;
+   if (t < show)
       return 0.0f;
-   t -= MUI_GRID_SHOW_TIME;
-   return t / MUI_GRID_FADE_TIME;
+   t -= show;
+   return (fade > 0.0f) ? t / fade : 1.0f;
 }
 
 static void materialui_render_menu_entry_playlist_grid(
