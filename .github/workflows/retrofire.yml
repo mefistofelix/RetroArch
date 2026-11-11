@@ -25,11 +25,13 @@ jobs:
           distribution: temurin
           java-version: "11"
 
+      # Optional: when the runner cannot install ccache (apt mirror down) the build goes on without it
       - uses: hendrikmuhs/ccache-action@v1.2
+        id: ccache
+        continue-on-error: true
         with:
           key: retrofire-armeabi-v7a
           max-size: 500M
-          update-package-index: true   # a stale apt index on the runner fails the ccache install
 
       - uses: actions/cache@v4
         with:
@@ -74,7 +76,7 @@ jobs:
       - name: Build APK
         working-directory: pkg/android/phoenix
         env:
-          NDK_CCACHE: ccache
+          NDK_CCACHE: ${{ steps.ccache.outcome == 'success' && 'ccache' || '' }}
         run: |
           ./gradlew --no-daemon assembleRetrofireRelease
           find build/outputs -name "*.apk" -exec ls -l {} \;
