@@ -5217,6 +5217,7 @@ static void materialui_compute_entries_box_playlist_grid(
    materialui_scrollbar_init(mui, width, height, header_height);
 }
 
+static bool materialui_grid_search_empty(materialui_handle_t *mui);
 static void materialui_render_grid_menu(materialui_handle_t *mui,
       void *userdata, unsigned video_width, unsigned video_height,
       unsigned header_height);
@@ -5387,6 +5388,11 @@ static void materialui_render_menu_entry_playlist_grid(
    gfx_display_t *p_disp   = disp_get_ptr();
    gfx_animation_t *p_anim = anim_get_ptr();
    uint32_t text_alpha     = (uint32_t)(255.0f * mui->transition_alpha);
+
+   /* Search without results: drawn in the middle of the screen
+    * (materialui_render_grid_search_empty), not as a cell */
+   if (materialui_grid_search_empty(mui))
+      return;
 
    if (!p_disp->dispctx->handles_transform)
    {
@@ -6934,6 +6940,74 @@ static void materialui_grid_clear_search(materialui_handle_t *mui)
    materialui_navigation_set(mui, false);
    menu_st->flags |= MENU_ST_FLAG_PREVENT_POPULATE
                    | MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+}
+
+/* Grid home screen with a search filter that matches no game: the
+ * list holds only the 'no entries' message */
+static bool materialui_grid_search_empty(materialui_handle_t *mui)
+{
+   struct menu_state *menu_st = menu_state_get_ptr();
+   menu_list_t *menu_list     = menu_st->entries.list;
+   file_list_t *list          = menu_list ? MENU_LIST_GET_SELECTION(menu_list, 0) : NULL;
+   return mui->grid_home
+         && (mui->list_view_type == MUI_LIST_VIEW_PLAYLIST_THUMB_GRID)
+         && menu_entries_search_get_terms()
+         && list && (list->size == 1)
+         && (list->list[0].type == MENU_INFO_MESSAGE);
+}
+
+/* Search without results: the message in the middle of the screen
+ * and, below it, a 'show all' button (OK removes the filter) */
+static void materialui_render_grid_search_empty(materialui_handle_t *mui,
+      void *userdata, unsigned video_width, unsigned video_height,
+      unsigned header_height)
+{
+   int i;
+   math_matrix_4x4 mymat;
+   float icon_color[16];
+   struct menu_state *menu_st = menu_state_get_ptr();
+   file_list_t *list          = MENU_LIST_GET_SELECTION(menu_st->entries.list, 0);
+   gfx_display_t *p_disp      = disp_get_ptr();
+   const char *msg            = list->list[0].path;
+   const char *btn            = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL);
+   float centre_x             = (float)video_width / 2.0f;
+   float centre_y             = (float)header_height
+         + (float)(video_height - header_height) / 2.0f;
+   float btn_h                = (float)mui->icon_size * 1.5f;
+   float btn_text_w           = (float)font_driver_get_message_width(
+         mui->font_data.list.font, btn, strlen(btn), 1.0f);
+   float btn_w                = btn_text_w + (float)mui->icon_size
+         + (float)mui->margin * 3.0f;
+   float btn_x                = centre_x - btn_w / 2.0f;
+   float btn_y                = centre_y + (float)mui->margin;
+
+   if (!p_disp->dispctx->handles_transform)
+      gfx_display_rotate_z(p_disp, &mymat, 1.0f, 0.0f, userdata);
+
+   for (i = 0; i < 16; i++)
+      icon_color[i] = 1.0f;
+
+   if (msg)
+      gfx_display_draw_text(mui->font_data.list.font, msg,
+            centre_x,
+            centre_y - (float)mui->margin - (float)mui->font_data.list.line_height / 2.0f
+                  + (float)mui->font_data.list.line_centre_offset,
+            video_width, video_height, mui->colors.list_text,
+            TEXT_ALIGN_CENTER, 1.0f, false, 0.0f, false);
+
+   gfx_display_draw_quad(p_disp, userdata, video_width, video_height,
+         (int)btn_x, (int)btn_y, (unsigned)btn_w, (unsigned)btn_h,
+         video_width, video_height,
+         mui->colors.list_highlighted_background, NULL);
+   materialui_draw_icon(userdata, p_disp, video_width, video_height,
+         mui->icon_size, mui->textures.list[MUI_TEXTURE_REMOVE],
+         btn_x + (float)mui->margin, btn_y + (btn_h - (float)mui->icon_size) / 2.0f,
+         0, 1, icon_color, &mymat);
+   gfx_display_draw_text(mui->font_data.list.font, btn,
+         btn_x + (float)mui->margin * 2.0f + (float)mui->icon_size,
+         btn_y + btn_h / 2.0f + (float)mui->font_data.list.line_centre_offset,
+         video_width, video_height, mui->colors.list_text,
+         TEXT_ALIGN_LEFT, 1.0f, false, 0.0f, false);
 }
 
 static void materialui_grid_menu_activate(materialui_handle_t *mui)
@@ -8606,6 +8680,10 @@ static void materialui_frame(void *data, video_frame_info_t *video_info)
       materialui_render_menu_list(mui, p_disp,
             userdata, selection,
             video_width, video_height, list_x_offset);
+
+   if (materialui_grid_search_empty(mui))
+      materialui_render_grid_search_empty(mui, userdata,
+            video_width, video_height, header_height);
 
    /* Flush first layer of text
     * > Menu list only uses list and hint fonts */
@@ -11022,6 +11100,13 @@ static enum menu_action materialui_parse_menu_entry_action(
             default:
                break;
          }
+         return MENU_ACTION_NOOP;
+      }
+      /* Search without results: OK is the 'show all' button */
+      if (     materialui_grid_search_empty(mui)
+            && (action == MENU_ACTION_OK || action == MENU_ACTION_SELECT))
+      {
+         materialui_grid_clear_search(mui);
          return MENU_ACTION_NOOP;
       }
       if (action == MENU_ACTION_CANCEL)
