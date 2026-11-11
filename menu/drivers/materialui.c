@@ -6965,10 +6965,8 @@ static void materialui_render_grid_search_empty(materialui_handle_t *mui,
    int i;
    math_matrix_4x4 mymat;
    float icon_color[16];
-   struct menu_state *menu_st = menu_state_get_ptr();
-   file_list_t *list          = MENU_LIST_GET_SELECTION(menu_st->entries.list, 0);
    gfx_display_t *p_disp      = disp_get_ptr();
-   const char *msg            = list->list[0].path;
+   const char *msg            = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH_NO_RESULTS);
    const char *btn            = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL);
    float centre_x             = (float)video_width / 2.0f;
    float centre_y             = (float)header_height
@@ -8655,7 +8653,9 @@ static void materialui_frame(void *data, video_frame_info_t *video_info)
          mui, p_disp, userdata, menu_input, video_width, video_height,
          header_height, list_x_offset, selection);
 
-   /* Draw 'highlighted entry' selection box */
+   /* Draw 'highlighted entry' selection box
+    * (none for the 'no results' screen of the grid search) */
+   if (!materialui_grid_search_empty(mui))
    materialui_render_selection_highlight(
          mui,
          p_disp,

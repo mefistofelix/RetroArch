@@ -12004,6 +12004,10 @@ MSG_HASH(
    "Griglia"
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_SEARCH_NO_RESULTS,
+   "Nessun gioco trovato"
+   )
+MSG_HASH(
    MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL,
    "Mostra tutti"
    )

@@ -12960,6 +12960,10 @@ MSG_HASH(
    "Grid"
    )
 MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_SEARCH_NO_RESULTS,
+   "No games found"
+   )
+MSG_HASH(
    MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL,
    "Show All"
    )
