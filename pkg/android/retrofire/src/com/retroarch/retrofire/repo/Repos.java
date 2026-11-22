@@ -479,14 +479,9 @@ public final class Repos {
   public static void onStart(final Activity a) {
     if (refreshing) return;
     refreshing = true;
-    // First start without any RetroFire config (no stick, nothing from a repository yet) and
-    // without repositories: the "Repository" screen opens by itself, so a new TV can get its
-    // games with the phone (the grid and its side menu come with the config).
-    if (!hasDiskConfig(a) && repos(loadState(a)).isEmpty()) {
-      new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
-        @Override public void run() { if (!a.isFinishing()) showManage(a); }
-      }, 2500);
-    }
+    // No screen opens by itself here: a dialog shown while RetroArch takes the window at start
+    // stays drawn without focus (keys go to the grid below). The grid is the home screen; an
+    // empty one has an 'Aggiungi repository' button, and its side menu has 'Repository'.
     Thread t = new Thread(new Runnable() {
       @Override public void run() {
         boolean first = true;
