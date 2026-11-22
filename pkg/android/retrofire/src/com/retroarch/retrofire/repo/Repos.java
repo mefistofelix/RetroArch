@@ -263,7 +263,14 @@ public final class Repos {
    * Downloads and decrypts a repository's index when it changed (or force); stores it in
    * repos/<id>.json. Returns the index. The repository JSON gets its id and name from it.
    */
+  /** Progress text for the user (any thread). */
+  interface Note { void say(String text); }
+
   static JSONObject refreshIndex(Context c, Repo r, boolean force) throws Exception {
+    return refreshIndex(c, r, force, null);
+  }
+
+  static JSONObject refreshIndex(Context c, Repo r, boolean force, final Note note) throws Exception {
     Source src = Source.of(r.url());
     Map<String, Source.Remote> listing = src.list();
     Source.Remote ir = listing.get("index.rfi");
@@ -271,10 +278,29 @@ public final class Repos {
     JSONObject cached = r.id().isEmpty() ? null : index(c, r.id());
     if (!force && cached != null && !stamp.isEmpty() && stamp.equals(r.j.optString("stamp")))
       return cached;
+    final long total = ir != null ? ir.size : 0;
+    if (note != null) note.say("Scarico l'elenco dei giochi…");
     InputStream raw = src.open("index.rfi", listing);
+    if (note != null) {
+      raw = new FilterInputStream(raw) {
+        long done, shown;
+        @Override public int read(byte[] b, int off, int len) throws IOException {
+          int k = super.read(b, off, len);
+          if (k > 0) {
+            done += k;
+            if (done - shown > (256 << 10)) {
+              shown = done;
+              note.say("Scarico l'elenco dei giochi: " + mb(done) + (total > 0 ? " di " + mb(total) : ""));
+            }
+          }
+          return k;
+        }
+      };
+    }
     try {
       Crypto.Header h = Crypto.readHeader(raw);
       if (h.kind != 1) throw new IOException("il file indice non è un indice");
+      if (note != null && !r.j.has("enc")) note.say("Controllo la password…");
       Crypto.Keys k = r.keys(h);
       JSONObject idx = new JSONObject(new String(readAll(new GZIPInputStream(new Crypto.DecryptStream(raw, h, k))), "UTF-8"));
       JSONObject info = idx.getJSONObject("repo");
@@ -690,15 +716,25 @@ public final class Repos {
           if (got != null && open[0]) {
             open[0] = false;
             final AlertDialog[] busy = new AlertDialog[1];
+            final TextView step = new TextView(a);
+            step.setTextSize(17f);
+            int p2 = (int) (24 * a.getResources().getDisplayMetrics().density);
+            step.setPadding(p2, p2, p2, p2);
+            step.setText("Ricevuto dal telefono.");
             a.runOnUiThread(new Runnable() {
               @Override public void run() {
                 try { d.dismiss(); } catch (Exception e) { /* gone */ }
-                busy[0] = builder(a).setMessage("Ricevuto dal telefono: aggiungo il repository…")
-                    .setCancelable(false).create();
+                busy[0] = builder(a).setTitle("Aggiungo il repository").setView(step).setCancelable(false).create();
                 busy[0].show();
               }
             });
-            final String result = addRepos(a, got.optJSONArray("repos"));
+            Note note = new Note() {
+              @Override public void say(final String text) {
+                a.runOnUiThread(new Runnable() { @Override public void run() { step.setText(text); } });
+              }
+            };
+            final String result = addRepos(a, got.optJSONArray("repos"), note);
+            note.say("Preparo l'elenco dei giochi…");
             writePlaylists(a);
             start(a, "", "");   // the grid (always the home screen) reloads with the new games
             a.runOnUiThread(new Runnable() {
@@ -718,6 +754,10 @@ public final class Repos {
 
   /** Adds (or updates) the repositories received; returns a message for the user. */
   static String addRepos(Activity a, JSONArray list) {
+    return addRepos(a, list, null);
+  }
+
+  static String addRepos(Activity a, JSONArray list, Note note) {
     if (list == null || list.length() == 0) return "Non è arrivato nessun repository.";
     JSONObject state = loadState(a);
     StringBuilder msg = new StringBuilder();
@@ -728,7 +768,7 @@ public final class Repos {
         JSONObject j = new JSONObject().put("url", in.optString("url").trim())
             .put("password", in.optString("password")).put("name", in.optString("name").trim());
         Repo r = new Repo(j);
-        JSONObject idx = refreshIndex(a, r, true);
+        JSONObject idx = refreshIndex(a, r, true, note);
         JSONArray all = state.getJSONArray("repos");
         JSONArray keep = new JSONArray();
         for (int k = 0; k < all.length(); k++)

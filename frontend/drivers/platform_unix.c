@@ -716,11 +716,35 @@ void android_repo_poll(void)
    __sync_synchronize();
    android_repo_state = 0;
 
-   /* The game lists changed on disk: drop the cached one and rebuild */
+   /* The game lists changed on disk: drop the cached one, and if a game
+    * list is on screen open it again (a plain refresh keeps what it read) */
    playlist_free_cached();
    menu_st = menu_state_get_ptr();
-   if (menu_st)
-      menu_st->flags |= MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+   if (menu_st && menu_st->entries.list)
+   {
+      file_list_t *stack = MENU_LIST_GET(menu_st->entries.list, 0);
+      const char *top_label = NULL;
+      const char *top_path  = NULL;
+      if (stack && stack->size)
+      {
+         top_label = stack->list[stack->size - 1].label;
+         top_path  = stack->list[stack->size - 1].path;
+      }
+      if (     top_label && top_path && stack->size > 1
+            && string_is_equal(top_label,
+                  msg_hash_to_str(MENU_ENUM_LABEL_DEFERRED_PLAYLIST_LIST)))
+      {
+         char playlist_path[PATH_MAX_LENGTH];
+         size_t selection = 0;
+         strlcpy(playlist_path, top_path, sizeof(playlist_path));
+         menu_entries_pop_stack(&selection, 0, 0);
+         generic_action_ok_displaylist_push(playlist_path, NULL, "",
+               FILE_TYPE_PLAYLIST_COLLECTION, 0, 0,
+               ACTION_OK_DL_PLAYLIST_COLLECTION);
+      }
+      else
+         menu_st->flags |= MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+   }
 
    /* "!grid": the first repository was just added, open the game list
     * (menu_startup_playlist) as at start-up */
