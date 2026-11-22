@@ -286,7 +286,7 @@ public final class Updater {
       }, new IntentFilter(ACTION_RESULT));
       Intent back = new Intent(ACTION_RESULT).setPackage(app.getPackageName());
       int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-      if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
+      if (Build.VERSION.SDK_INT >= 31) flags |= 0x02000000; // FLAG_MUTABLE (compileSdk 30 lacks the name)
       // read by Relauncher once the new build is in place: reopen RetroFire (only after our own update)
       prefs(app).edit().putLong(RELAUNCH_AT, System.currentTimeMillis()).commit();
       s.commit(PendingIntent.getBroadcast(app, id, back, flags).getIntentSender());
