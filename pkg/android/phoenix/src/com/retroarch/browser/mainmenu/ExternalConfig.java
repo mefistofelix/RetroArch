@@ -102,15 +102,75 @@ public final class ExternalConfig
 			}
 		}
 
-		// No disk has one: the copy installed from a remote repository (RetroFire flavor,
-		// <files>/RetroFire/retroarch.cfg), where {cfgdir} and {appdata} are that same folder.
+		// No disk has one: the config bundled in the RetroFire build (assets/retrofire: the
+		// template and the pad profiles), copied to <files>/RetroFire when the app changed;
+		// {cfgdir} and {appdata} are that folder. Remote repositories add games there.
 		File internal = new File(ctx.getFilesDir(), FOLDER);
+		copyBundled(ctx, internal);
 		if (new File(internal, CONFIG).isFile())
 		{
 			Log.i(TAG, "Using the internal " + new File(internal, CONFIG));
 			return new ExternalConfig(internal, internal);
 		}
 		return null;
+	}
+
+	/** assets/retrofire (RetroFire flavor only) -> dir, once per installed version of the app. */
+	private static void copyBundled(Context ctx, File dir)
+	{
+		try
+		{
+			android.content.res.AssetManager am = ctx.getAssets();
+			String[] top = am.list("retrofire");
+			if (top == null || top.length == 0)
+				return;
+			long version = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).lastUpdateTime;
+			File marker = new File(dir, ".bundled");
+			if (marker.isFile() && new File(dir, CONFIG).isFile())
+			{
+				BufferedReader br = new BufferedReader(new FileReader(marker));
+				String seen = br.readLine();
+				br.close();
+				if (String.valueOf(version).equals(seen))
+					return;
+			}
+			copyAssets(am, "retrofire", dir);
+			PrintWriter w = new PrintWriter(marker);
+			w.println(version);
+			w.close();
+			Log.i(TAG, "Bundled RetroFire config copied to " + dir);
+		}
+		catch (Exception e)
+		{
+			Log.e(TAG, "Bundled config not copied: " + e);
+		}
+	}
+
+	private static void copyAssets(android.content.res.AssetManager am, String path, File dst) throws IOException
+	{
+		String[] names = am.list(path);
+		if (names != null && names.length > 0)
+		{
+			dst.mkdirs();
+			for (String n : names)
+				copyAssets(am, path + "/" + n, new File(dst, n));
+			return;
+		}
+		InputStream in = am.open(path);
+		dst.getParentFile().mkdirs();
+		OutputStream out = new FileOutputStream(dst);
+		try
+		{
+			byte[] buf = new byte[1 << 16];
+			int k;
+			while ((k = in.read(buf)) > 0)
+				out.write(buf, 0, k);
+		}
+		finally
+		{
+			in.close();
+			out.close();
+		}
 	}
 
 	private String expand(Context ctx, String value)

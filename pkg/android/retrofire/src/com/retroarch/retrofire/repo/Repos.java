@@ -348,7 +348,6 @@ public final class Repos {
               .put("crc32", "DETECT")
               .put("db_name", p.optString("db"));
           items.add(it);
-          writeThumbs(thDir, p, main);
         }
       }
       Collections.sort(items, new Comparator<JSONObject>() {
@@ -388,6 +387,15 @@ public final class Repos {
     }
   }
 
+  /** Box art and screenshot of every game, those still missing; slow the first time (JPEG to PNG). */
+  static void writeAllThumbs(Context c) {
+    File thDir = folder(c, config(c), "thumbnails_directory", "thumbnails");
+    JSONObject state = loadState(c);
+    for (Repo r : repos(state))
+      for (JSONObject p : packages(index(c, r.id())).values())
+        if ("game".equals(p.optString("kind"))) writeThumbs(thDir, p, p.optString("main"));
+  }
+
   static final String BAD = "[&*/:`<>?\\\\|\"]";
 
   static void writeThumbs(File thDir, JSONObject p, String main) {
@@ -402,7 +410,7 @@ public final class Repos {
       String b64 = t.optString(k[0]);
       if (b64.isEmpty()) continue;
       File dir = new File(new File(thDir, db), k[1]);
-      String[] names = { stem.replaceAll(BAD, "_"), p.optString("label").replaceAll(BAD, "_") };
+      String[] names = { stem.replaceAll(BAD, "_") };
       for (String n : names) {
         File f = new File(dir, n + ".png");
         if (f.isFile()) continue;
@@ -451,7 +459,7 @@ public final class Repos {
     // First start without any RetroFire config (no stick, nothing from a repository yet) and
     // without repositories: the "Repository" screen opens by itself, so a new TV can get its
     // games with the phone (the grid and its side menu come with the config).
-    if (!hasDiskConfig(a) && !new File(home(a), "retroarch.cfg").isFile() && repos(loadState(a)).isEmpty()) {
+    if (!hasDiskConfig(a) && repos(loadState(a)).isEmpty()) {
       new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
         @Override public void run() { if (!a.isFinishing()) showManage(a); }
       }, 2500);
@@ -463,6 +471,7 @@ public final class Repos {
           boolean changed = refreshDue(a, first);
           changed |= writePlaylists(a);
           if (changed) start(a, "", "");   // the menu reloads the game lists
+          writeAllThumbs(a);
           first = false;
           try { Thread.sleep(INDEX_MAX_AGE); } catch (InterruptedException e) { return; }
         }
@@ -682,16 +691,26 @@ public final class Repos {
         while (open[0] && System.currentTimeMillis() < until) {
           JSONObject got = link.poll();
           if (got != null && open[0]) {
-            a.runOnUiThread(new Runnable() {
-              @Override public void run() { note.setText("Ricevuto: controllo il repository…"); }
-            });
-            final String result = addRepos(a, got.optJSONArray("repos"));
+            open[0] = false;
+            final AlertDialog[] busy = new AlertDialog[1];
             a.runOnUiThread(new Runnable() {
               @Override public void run() {
                 try { d.dismiss(); } catch (Exception e) { /* gone */ }
-                afterAdd(a, result);
+                busy[0] = builder(a).setMessage("Ricevuto dal telefono: aggiungo il repository…")
+                    .setCancelable(false).create();
+                busy[0].show();
               }
             });
+            final String result = addRepos(a, got.optJSONArray("repos"));
+            writePlaylists(a);
+            start(a, "", "");   // the grid shows the new games
+            a.runOnUiThread(new Runnable() {
+              @Override public void run() {
+                try { if (busy[0] != null) busy[0].dismiss(); } catch (Exception e) { /* gone */ }
+                Toast.makeText(a, result, Toast.LENGTH_LONG).show();
+              }
+            });
+            writeAllThumbs(a);
             return;
           }
           try { Thread.sleep(3000); } catch (InterruptedException e) { return; }
@@ -728,51 +747,6 @@ public final class Repos {
     }
     saveState(a, state);
     return msg.toString().trim();
-  }
-
-  static void afterAdd(final Activity a, String result) {
-    final boolean needsConfig = !hasDiskConfig(a) && !new File(home(a), "retroarch.cfg").isFile() && firstAppPackage(a) != null;
-    AlertDialog.Builder b = builder(a).setTitle("Repository").setMessage(result
-        + (needsConfig ? "\n\nRetroFire scarica ora la sua configurazione (pochi secondi) e si riavvia." : ""));
-    b.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-      @Override public void onClick(DialogInterface d, int w) {
-        if (needsConfig) {
-          String[] pick = firstAppPackage(a);
-          List<Plan.Item> items = new ArrayList<Plan.Item>();
-          JSONObject p = packages(index(a, pick[0])).get(pick[1]);
-          items.add(new Plan.Item(pick[0], p));
-          download(a, new Plan(items, null, null), true);
-        } else {
-          new Thread(new Runnable() {
-            @Override public void run() { writePlaylists(a); start(a, "", ""); }
-          }).start();
-        }
-      }
-    });
-    b.show();
-  }
-
-  /** {repo id, package id} of a RetroFire config package, or null. */
-  static String[] firstAppPackage(Context c) {
-    JSONObject state = loadState(c);
-    for (Repo r : repos(state))
-      for (JSONObject p : packages(index(c, r.id())).values())
-        if ("app".equals(p.optString("kind")) && !installed(state, r.id(), p.optString("id")))
-          return new String[] { r.id(), p.optString("id") };
-    return null;
-  }
-
-  static void restart(Activity a) {
-    Intent i = a.getPackageManager().getLaunchIntentForPackage(a.getPackageName());
-    if (i != null) {
-      int flags = PendingIntent.FLAG_CANCEL_CURRENT;
-      if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
-      PendingIntent pi = PendingIntent.getActivity(a, 4711, i, flags);
-      AlarmManager am = (AlarmManager) a.getSystemService(Context.ALARM_SERVICE);
-      am.set(AlarmManager.RTC, System.currentTimeMillis() + 1500, pi);
-    }
-    a.finishAffinity();
-    System.exit(0);
   }
 
   // ================================================================ start a game that is not downloaded
@@ -889,7 +863,7 @@ public final class Repos {
         .setPositiveButton(tight ? "Fai spazio" : "Scarica", new DialogInterface.OnClickListener() {
           @Override public void onClick(DialogInterface d, int w) {
             if (tight) chooseRemovals(a, plan, label, Math.max(shortGame, 0), Math.max(shortInternal, 0));
-            else download(a, plan, false);
+            else download(a, plan);
           }
         })
         .setNegativeButton("Annulla", null)
@@ -975,7 +949,7 @@ public final class Repos {
               chooseRemovals(a, plan, label, shortGame, shortInternal);
               return;
             }
-            download(a, plan, false);
+            download(a, plan);
           }
         })
         .setNegativeButton("Annulla", null)
@@ -1035,7 +1009,7 @@ public final class Repos {
     return new File(home(c), path);   // retroarch.cfg, autoconfig/...
   }
 
-  static void download(final Activity a, final Plan plan, final boolean restartAfter) {
+  static void download(final Activity a, final Plan plan) {
     float dp = a.getResources().getDisplayMetrics().density;
     final TextView note = new TextView(a);
     note.setTextSize(16f);
@@ -1133,23 +1107,16 @@ public final class Repos {
         a.runOnUiThread(new Runnable() {
           @Override public void run() {
             try { d.dismiss(); } catch (Exception e) { /* gone */ }
-            finished(a, plan, err, restartAfter);
+            finished(a, plan, err);
           }
         });
       }
     }, "repo-download").start();
   }
 
-  static void finished(final Activity a, final Plan plan, String error, boolean restartAfter) {
+  static void finished(final Activity a, final Plan plan, String error) {
     if (error != null) {
       builder(a).setTitle("Download non riuscito").setMessage(error).setPositiveButton("OK", null).show();
-      return;
-    }
-    if (restartAfter) {
-      toast(a, "Configurazione installata: RetroFire si riavvia");
-      new Thread(new Runnable() {
-        @Override public void run() { writePlaylists(a); restart(a); }
-      }).start();
       return;
     }
     start(a, "", "");   // the game list shows it as downloaded

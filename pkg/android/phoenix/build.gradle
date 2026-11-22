@@ -131,6 +131,8 @@ android {
       // self-update (../retrofire): REQUEST_INSTALL_PACKAGES, Updater, Relauncher
       manifest.srcFile '../retrofire/AndroidManifest.xml'
       java.srcDirs += ['../play-core-stub', '../retrofire/src']
+      // the RetroFire config for TVs without a stick (rf app-config): assets/retrofire
+      assets.srcDirs += ['../retrofire/assets']
     }
     playStoreNormal {
       java.srcDirs += ['../play-core-impl']
