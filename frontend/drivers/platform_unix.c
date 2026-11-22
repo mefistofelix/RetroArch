@@ -728,6 +728,14 @@ void android_repo_poll(void)
       runloop_state_t *runloop_st = runloop_state_get_ptr();
       runloop_st->flags &= ~(RUNLOOP_FLAG_PAUSED | RUNLOOP_FLAG_IDLE);
       video_driver_unset_stub_frame();
+      /* the video driver draws nothing while 'unfocused' (has_focus) */
+      if (g_android)
+      {
+         slock_lock(g_android->mutex);
+         g_android->unfocused = false;
+         scond_broadcast(g_android->cond);
+         slock_unlock(g_android->mutex);
+      }
       android_repo_core[0] = '\0';
    }
 
