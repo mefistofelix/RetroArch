@@ -95,6 +95,7 @@
 #include "../../command.h"
 #ifdef ANDROID
 #include "../../playlist.h"
+#include "../../gfx/video_driver.h"
 #include "../../tasks/task_content.h"
 #include "../../menu/menu_cbs.h"
 #endif
@@ -715,6 +716,11 @@ void android_repo_poll(void)
       return;
    __sync_synchronize();
    android_repo_state = 0;
+
+   /* Java calls this after its dialog is gone: draw again even if the
+    * focus change that ends the 'stub frame' (no drawing while a dialog
+    * covers the app) was missed, or the screen keeps the old picture */
+   video_driver_unset_stub_frame();
 
    /* The game lists changed on disk: drop the cached one, and if a game
     * list is on screen open it again (a plain refresh keeps what it read) */

@@ -266,6 +266,32 @@ public final class Repos {
   /** Progress text for the user (any thread). */
   interface Note { void say(String text); }
 
+  /** Adding a repository: the index download is 90% of the bar, then the password check. */
+  static final class IndexProgress implements Note {
+    final ProgressBox box;
+    IndexProgress(ProgressBox box) { this.box = box; }
+    @Override public void say(String text) {
+      if (text.startsWith("Scarico l'elenco dei giochi: ")) {
+        // "Scarico l'elenco dei giochi: 4,2 MB di 9,3 MB"
+        String[] parts = text.substring(29).split(" di ");
+        double f = -1;
+        if (parts.length == 2) {
+          try { f = mbValue(parts[0]) / mbValue(parts[1]) * 0.9; } catch (Exception e) { f = -1; }
+        }
+        box.set("Scarico l'elenco dei giochi", f, text.substring(29));
+      } else if (text.startsWith("Controllo la password")) {
+        box.set("Controllo la password", 0.92, "");
+      } else {
+        box.set(text, -1, "");
+      }
+    }
+    static double mbValue(String s) {
+      String[] t = s.trim().replace(',', '.').split(" ");
+      double v = Double.parseDouble(t[0]);
+      return t.length > 1 && t[1].equals("GB") ? v * 1024 : v;
+    }
+  }
+
   static JSONObject refreshIndex(Context c, Repo r, boolean force) throws Exception {
     return refreshIndex(c, r, force, null);
   }
@@ -524,6 +550,48 @@ public final class Repos {
     return changed;
   }
 
+  /** Progress shown to the user: a line with what is happening, one bar, a line of details. */
+  static final class ProgressBox {
+    final Activity a;
+    final TextView status, detail;
+    final android.widget.ProgressBar bar;
+    final LinearLayout view;
+
+    ProgressBox(Activity a) {
+      this.a = a;
+      float dp = a.getResources().getDisplayMetrics().density;
+      int pad = (int) (24 * dp);
+      view = new LinearLayout(a);
+      view.setOrientation(LinearLayout.VERTICAL);
+      view.setPadding(pad, pad / 2, pad, pad / 2);
+      status = new TextView(a);
+      status.setTextSize(18f);
+      view.addView(status);
+      bar = new android.widget.ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal);
+      bar.setMax(1000);
+      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (int) (14 * dp));
+      lp.topMargin = (int) (12 * dp);
+      lp.bottomMargin = (int) (8 * dp);
+      view.addView(bar, lp);
+      detail = new TextView(a);
+      detail.setTextSize(14f);
+      detail.setAlpha(0.8f);
+      view.addView(detail);
+    }
+
+    /** fraction < 0: the bar runs without a known end. Any thread. */
+    void set(final String what, final double fraction, final String more) {
+      a.runOnUiThread(new Runnable() {
+        @Override public void run() {
+          status.setText(what);
+          bar.setIndeterminate(fraction < 0);
+          if (fraction >= 0) bar.setProgress((int) (Math.min(1, fraction) * 1000));
+          detail.setText(more == null ? "" : more);
+        }
+      });
+    }
+  }
+
   static AlertDialog.Builder builder(Activity a) {
     return new AlertDialog.Builder(a, android.R.style.Theme_DeviceDefault_Dialog_Alert);
   }
@@ -711,31 +779,30 @@ public final class Repos {
           if (got != null && open[0]) {
             open[0] = false;
             final AlertDialog[] busy = new AlertDialog[1];
-            final TextView step = new TextView(a);
-            step.setTextSize(17f);
-            int p2 = (int) (24 * a.getResources().getDisplayMetrics().density);
-            step.setPadding(p2, p2, p2, p2);
-            step.setText("Ricevuto dal telefono.");
+            final ProgressBox box = new ProgressBox(a);
+            box.set("Ricevuto dal telefono", -1, "");
             a.runOnUiThread(new Runnable() {
               @Override public void run() {
                 try { d.dismiss(); } catch (Exception e) { /* gone */ }
-                busy[0] = builder(a).setTitle("Aggiungo il repository").setView(step).setCancelable(false).create();
+                busy[0] = builder(a).setTitle("Aggiungo il repository").setView(box.view).setCancelable(false).create();
                 busy[0].show();
               }
             });
             Note note = new Note() {
-              @Override public void say(final String text) {
-                a.runOnUiThread(new Runnable() { @Override public void run() { step.setText(text); } });
-              }
+              @Override public void say(String text) { box.set(text, -1, ""); }
             };
-            final String result = addRepos(a, got.optJSONArray("repos"), note);
-            note.say("Preparo l'elenco dei giochi…");
+            final String result = addRepos(a, got.optJSONArray("repos"), new IndexProgress(box));
+            box.set("Preparo l'elenco dei giochi", 0.97, "");
             writePlaylists(a);
-            start(a, "", "");   // the grid (always the home screen) reloads with the new games
+            box.set("Fatto", 1, result);
             a.runOnUiThread(new Runnable() {
               @Override public void run() {
                 try { if (busy[0] != null) busy[0].dismiss(); } catch (Exception e) { /* gone */ }
                 Toast.makeText(a, result, Toast.LENGTH_LONG).show();
+                // once the box is gone and RetroArch has the screen again: reload the grid
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                  @Override public void run() { start(a, "", ""); }
+                }, 400);
               }
             });
             writeAllThumbs(a);
@@ -1042,15 +1109,11 @@ public final class Repos {
   }
 
   static void download(final Activity a, final Plan plan) {
-    float dp = a.getResources().getDisplayMetrics().density;
-    final TextView note = new TextView(a);
-    note.setTextSize(16f);
-    int pad = (int) (24 * dp);
-    note.setPadding(pad, pad / 2, pad, pad / 3);
-    note.setText("Preparo…");
+    final ProgressBox box = new ProgressBox(a);
+    box.set("Preparo il download", -1, "");
     final boolean[] cancel = { false };
     final AlertDialog d = builder(a).setTitle(plan.game != null ? plan.game.p.optString("label") : "RetroFire")
-        .setView(note).setCancelable(false)
+        .setView(box.view).setCancelable(false)
         .setNegativeButton("Annulla", new DialogInterface.OnClickListener() {
           @Override public void onClick(DialogInterface di, int w) { cancel[0] = true; }
         }).create();
@@ -1097,11 +1160,13 @@ public final class Repos {
                       long done = before + in.count;
                       double secs = Math.max(0.5, (now - t0) / 1000.0);
                       long speed = (long) (done / secs);
-                      final String text = "Da " + repo.name() + "\n"
-                          + "Pacchetto " + (n + 1) + " di " + plan.items.size() + ": " + item.p.optString("label") + "\n"
-                          + mb(done) + " di " + mb(total) + "  ·  " + mb(speed) + "/s"
-                          + (speed > 0 ? "  ·  mancano " + duration(Math.max(0, total - done) / Math.max(1, speed)) : "");
-                      a.runOnUiThread(new Runnable() { @Override public void run() { note.setText(text); } });
+                      String kind = item.isGame() ? "il gioco" : "core".equals(item.p.optString("kind")) ? "l'emulatore" : "il BIOS";
+                      box.set("Scarico " + kind + " " + item.p.optString("label")
+                              + (plan.items.size() > 1 ? "  (" + (n + 1) + " di " + plan.items.size() + ")" : ""),
+                          total > 0 ? (double) done / total : -1,
+                          mb(done) + " di " + mb(total) + "  ·  " + mb(speed) + "/s"
+                              + (speed > 0 ? "  ·  mancano " + duration(Math.max(0, total - done) / Math.max(1, speed)) : "")
+                              + "  ·  da " + repo.name());
                     }
                   }
                 } finally {
@@ -1151,7 +1216,10 @@ public final class Repos {
       builder(a).setTitle("Download non riuscito").setMessage(error).setPositiveButton("OK", null).show();
       return;
     }
-    start(a, "", "");   // the game list shows it as downloaded
+    // the game list shows it as downloaded (after the box is gone: RetroArch draws again)
+    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+      @Override public void run() { start(a, "", ""); }
+    }, 400);
     if (plan.game == null) return;
     JSONObject state = loadState(a);
     JSONObject e = state.optJSONObject("installed") == null ? null
