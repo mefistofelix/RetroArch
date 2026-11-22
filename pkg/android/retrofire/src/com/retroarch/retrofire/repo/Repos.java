@@ -801,7 +801,7 @@ public final class Repos {
                 Toast.makeText(a, result, Toast.LENGTH_LONG).show();
                 // once the box is gone and RetroArch has the screen again: reload the grid
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
-                  @Override public void run() { start(a, "", ""); }
+                  @Override public void run() { start(a, "", "!focus"); }
                 }, 400);
               }
             });
@@ -1218,7 +1218,7 @@ public final class Repos {
     }
     // the game list shows it as downloaded (after the box is gone: RetroArch draws again)
     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
-      @Override public void run() { start(a, "", ""); }
+      @Override public void run() { start(a, "", "!focus"); }
     }, 400);
     if (plan.game == null) return;
     JSONObject state = loadState(a);

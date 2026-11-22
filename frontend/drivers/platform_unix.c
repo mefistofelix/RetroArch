@@ -96,6 +96,7 @@
 #ifdef ANDROID
 #include "../../playlist.h"
 #include "../../gfx/video_driver.h"
+#include "../../runloop.h"
 #include "../../tasks/task_content.h"
 #include "../../menu/menu_cbs.h"
 #endif
@@ -717,10 +718,18 @@ void android_repo_poll(void)
    __sync_synchronize();
    android_repo_state = 0;
 
-   /* Java calls this after its dialog is gone: draw again even if the
-    * focus change that ends the 'stub frame' (no drawing while a dialog
-    * covers the app) was missed, or the screen keeps the old picture */
-   video_driver_unset_stub_frame();
+   /* "!focus": Java calls this after its dialog is gone. A dialog takes the
+    * window focus (APP_CMD_LOST_FOCUS: paused, idle, 'stub frame', nothing
+    * drawn); the focus coming back is not always reported, and the screen
+    * kept the old picture while the menu went on underneath. Do what
+    * APP_CMD_GAINED_FOCUS does */
+   if (string_is_equal(android_repo_core, "!focus"))
+   {
+      runloop_state_t *runloop_st = runloop_state_get_ptr();
+      runloop_st->flags &= ~(RUNLOOP_FLAG_PAUSED | RUNLOOP_FLAG_IDLE);
+      video_driver_unset_stub_frame();
+      android_repo_core[0] = '\0';
+   }
 
    /* The game lists changed on disk: drop the cached one, and if a game
     * list is on screen open it again (a plain refresh keeps what it read) */
