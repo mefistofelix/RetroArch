@@ -701,9 +701,11 @@ public final class Repos {
                 busy[0].show();
               }
             });
+            final boolean first = repos(loadState(a)).isEmpty();
             final String result = addRepos(a, got.optJSONArray("repos"));
             writePlaylists(a);
-            start(a, "", "");   // the grid shows the new games
+            // the grid shows the new games; with the first repository it opens it, too
+            start(a, first && !repos(loadState(a)).isEmpty() ? "!grid" : "", "");
             a.runOnUiThread(new Runnable() {
               @Override public void run() {
                 try { if (busy[0] != null) busy[0].dismiss(); } catch (Exception e) { /* gone */ }

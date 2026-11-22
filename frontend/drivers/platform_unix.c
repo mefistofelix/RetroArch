@@ -96,6 +96,7 @@
 #ifdef ANDROID
 #include "../../playlist.h"
 #include "../../tasks/task_content.h"
+#include "../../menu/menu_cbs.h"
 #endif
 #endif
 
@@ -720,6 +721,24 @@ void android_repo_poll(void)
    menu_st = menu_state_get_ptr();
    if (menu_st)
       menu_st->flags |= MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+
+   /* "!grid": the first repository was just added, open the game list
+    * (menu_startup_playlist) as at start-up */
+   if (string_is_equal(android_repo_content, "!grid"))
+   {
+      settings_t *settings = config_get_ptr();
+      char playlist_path[PATH_MAX_LENGTH];
+      if (settings && !string_is_empty(settings->arrays.menu_startup_playlist))
+      {
+         fill_pathname_join_special(playlist_path, settings->paths.directory_playlist,
+               settings->arrays.menu_startup_playlist, sizeof(playlist_path));
+         if (path_is_valid(playlist_path))
+            generic_action_ok_displaylist_push(playlist_path, NULL, "",
+                  FILE_TYPE_PLAYLIST_COLLECTION, 0, 0,
+                  ACTION_OK_DL_PLAYLIST_COLLECTION);
+      }
+      return;
+   }
 
    if (!string_is_empty(android_repo_content) && !string_is_empty(android_repo_core))
    {
