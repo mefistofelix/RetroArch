@@ -1,0 +1,8 @@
+tyrquake_analog_deadzone = "15"
+tyrquake_compute_rendering = "enabled"
+tyrquake_framerate = "auto"
+tyrquake_invert_y_axis = "disabled"
+tyrquake_renderer = "auto"
+tyrquake_resolution = "320x200"
+tyrquake_rumble = "disabled"
+tyrquake_sound_samplerate = "auto"

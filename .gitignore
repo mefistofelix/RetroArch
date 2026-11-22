@@ -278,3 +278,7 @@ gfx/drivers/rsx_shaders/modern_opaque.fpo
 gfx/drivers/rsx_shaders/modern_opaque.vpo
 pkg/psl1ght/pkg/USRDIR/shaders_cg/
 !pkg/psl1ght/pkg/USRDIR/system/
+
+# RetroFire: the config bundled in the APK (rf app-config)
+!pkg/android/retrofire/assets/
+!pkg/android/retrofire/assets/**

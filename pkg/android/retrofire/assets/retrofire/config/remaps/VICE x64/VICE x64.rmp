@@ -1,0 +1,5 @@
+input_remap_port_p1 = "0"
+input_remap_port_p2 = "0"
+input_remap_port_p3 = "1"
+input_remap_port_p4 = "2"
+input_remap_port_p5 = "3"

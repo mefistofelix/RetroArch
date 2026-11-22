@@ -1,0 +1,3 @@
+vice_autostart = "enabled"
+vice_autoloadwarp = "enabled"
+vice_joyport = "2"
