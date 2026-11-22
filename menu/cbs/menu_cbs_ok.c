@@ -6640,7 +6640,24 @@ STATIC_DEFAULT_ACTION_OK_FUNC(action_ok_video_filter, ACTION_OK_DL_VIDEO_FILTER)
 STATIC_DEFAULT_ACTION_OK_FUNC(action_ok_overlay_preset, ACTION_OK_DL_OVERLAY_PRESET)
 STATIC_DEFAULT_ACTION_OK_FUNC(action_ok_osk_overlay_preset, ACTION_OK_DL_OSK_OVERLAY_PRESET)
 STATIC_DEFAULT_ACTION_OK_FUNC(action_ok_video_font, ACTION_OK_DL_VIDEO_FONT)
-STATIC_DEFAULT_ACTION_OK_FUNC(action_ok_rpl_entry, ACTION_OK_DL_RPL_ENTRY)
+static int action_ok_rpl_entry(const char *path, const char *label,
+      unsigned type, size_t idx, size_t entry_idx)
+{
+#ifdef ANDROID
+   /* RetroFire: a game of a remote repository that is not downloaded yet
+    * goes to the Java side at once (what it needs, download, start),
+    * without the entry's submenu */
+   playlist_t *playlist = playlist_get_cached();
+   const struct playlist_entry *entry = NULL;
+   if (playlist)
+      playlist_get_index(playlist, entry_idx, &entry);
+   if (     entry && entry->path
+         && string_starts_with(entry->path, ANDROID_REPO_PREFIX))
+      return android_repo_launch(entry->path, entry->core_path, entry->label) ? 0 : -1;
+#endif
+   return generic_action_ok_displaylist_push(path, NULL, label, type,
+         idx, entry_idx, ACTION_OK_DL_RPL_ENTRY);
+}
 STATIC_DEFAULT_ACTION_OK_FUNC(action_ok_open_archive, ACTION_OK_DL_OPEN_ARCHIVE)
 STATIC_DEFAULT_ACTION_OK_FUNC(action_ok_open_archive_detect_core, ACTION_OK_DL_OPEN_ARCHIVE_DETECT_CORE)
 STATIC_DEFAULT_ACTION_OK_FUNC(action_ok_file_load_music, ACTION_OK_DL_MUSIC)

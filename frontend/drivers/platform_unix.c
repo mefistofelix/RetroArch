@@ -731,54 +731,13 @@ void android_repo_poll(void)
       android_repo_core[0] = '\0';
    }
 
-   /* The game lists changed on disk: if a game list is on screen open it
-    * again (a plain refresh keeps what it read). The cached playlist is not
-    * freed here: the menu (and the grid's thumbnail streaming, on the video
-    * thread) still uses it; opening the list frees and reloads it */
+   /* The game lists changed on disk: refresh the menu. A game list on
+    * screen is read again from its file (menu_displaylist frees and loads
+    * the cached playlist). Reopening it here, outside the menu loop, froze
+    * the picture */
    menu_st = menu_state_get_ptr();
-   if (menu_st && menu_st->entries.list)
-   {
-      file_list_t *stack = MENU_LIST_GET(menu_st->entries.list, 0);
-      const char *top_label = NULL;
-      const char *top_path  = NULL;
-      if (stack && stack->size)
-      {
-         top_label = stack->list[stack->size - 1].label;
-         top_path  = stack->list[stack->size - 1].path;
-      }
-      if (     top_label && top_path && stack->size > 1
-            && string_is_equal(top_label,
-                  msg_hash_to_str(MENU_ENUM_LABEL_DEFERRED_PLAYLIST_LIST)))
-      {
-         char playlist_path[PATH_MAX_LENGTH];
-         size_t selection = 0;
-         strlcpy(playlist_path, top_path, sizeof(playlist_path));
-         menu_entries_pop_stack(&selection, 0, 0);
-         generic_action_ok_displaylist_push(playlist_path, NULL, "",
-               FILE_TYPE_PLAYLIST_COLLECTION, 0, 0,
-               ACTION_OK_DL_PLAYLIST_COLLECTION);
-      }
-      else
-         menu_st->flags |= MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
-   }
-
-   /* "!grid": the first repository was just added, open the game list
-    * (menu_startup_playlist) as at start-up */
-   if (string_is_equal(android_repo_content, "!grid"))
-   {
-      settings_t *settings = config_get_ptr();
-      char playlist_path[PATH_MAX_LENGTH];
-      if (settings && !string_is_empty(settings->arrays.menu_startup_playlist))
-      {
-         fill_pathname_join_special(playlist_path, settings->paths.directory_playlist,
-               settings->arrays.menu_startup_playlist, sizeof(playlist_path));
-         if (path_is_valid(playlist_path))
-            generic_action_ok_displaylist_push(playlist_path, NULL, "",
-                  FILE_TYPE_PLAYLIST_COLLECTION, 0, 0,
-                  ACTION_OK_DL_PLAYLIST_COLLECTION);
-      }
-      return;
-   }
+   if (menu_st)
+      menu_st->flags |= MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
 
    if (!string_is_empty(android_repo_content) && !string_is_empty(android_repo_core))
    {
