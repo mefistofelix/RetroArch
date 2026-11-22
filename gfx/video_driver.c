@@ -1913,6 +1913,11 @@ void video_driver_lock_new(void)
 void video_driver_set_stub_frame(void)
 {
    video_driver_state_t *video_st = &video_driver_st;
+   /* Already stubbed (e.g. Android: the focus lost twice in a row, one
+    * dialog replacing another): keep the real frame function, or the stub
+    * would be saved as the 'real' one and nothing would be drawn again */
+   if (video_st->frame_bak)
+      return;
    video_st->frame_bak            = video_st->current_video->frame;
    video_st->current_video->frame = video_null.frame;
 }

@@ -17,7 +17,6 @@
  */
 
 #include <unistd.h>
-#include <android/log.h>
 #include <dlfcn.h>
 
 #include <android/keycodes.h>
@@ -465,7 +464,6 @@ static void android_input_poll_main_cmd(void)
                      RETRO_SENSOR_GYROSCOPE_ENABLE,
                      android_app->gyroscope_event_rate);
          }
-         __android_log_print(ANDROID_LOG_INFO, "RetroFire", "APP_CMD_GAINED_FOCUS");
          slock_lock(android_app->mutex);
          android_app->unfocused = false;
          scond_broadcast(android_app->cond);
@@ -496,7 +494,6 @@ static void android_input_poll_main_cmd(void)
                      RETRO_SENSOR_GYROSCOPE_DISABLE,
                      android_app->gyroscope_event_rate);
          }
-         __android_log_print(ANDROID_LOG_INFO, "RetroFire", "APP_CMD_LOST_FOCUS");
          slock_lock(android_app->mutex);
          android_app->unfocused = true;
          scond_broadcast(android_app->cond);
