@@ -73,6 +73,8 @@ android {
     retrofire {
       // RetroFire: Fire TV build (32-bit ARM only), next to the store RetroArch
       applicationIdSuffix '.retrofire'
+      // "1.22.2-rf<CI run>": the update dialog shows it (versionCode stays the build time)
+      versionName "${getManifestAttribute("versionName")}-rf${System.getenv("GITHUB_RUN_NUMBER") ?: "local"}"
       resValue "string", "app_name", "RetroFire"
       buildConfigField "boolean", "PLAY_STORE_BUILD", "false"
 
@@ -126,7 +128,9 @@ android {
       java.srcDirs += ['../play-core-stub']
     }
     retrofire {
-      java.srcDirs += ['../play-core-stub']
+      // self-update (../retrofire): REQUEST_INSTALL_PACKAGES, Updater, Relauncher
+      manifest.srcFile '../retrofire/AndroidManifest.xml'
+      java.srcDirs += ['../play-core-stub', '../retrofire/src']
     }
     playStoreNormal {
       java.srcDirs += ['../play-core-impl']

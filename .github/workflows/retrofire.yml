@@ -85,6 +85,9 @@ jobs:
         run: |
           mkdir -p out
           cp pkg/android/phoenix/build/outputs/apk/retrofire/release/*.apk out/RetroFire.apk
+          # version of the APK, for the self-update manifest (publish job)
+          aapt=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
+          "$aapt" dump badging out/RetroFire.apk | head -1 | tee out/version.txt
           so=$(find pkg/android/phoenix/build -path "*obj/local/armeabi-v7a/libretroarch-activity.so" | head -1)
           if [ -n "$so" ]; then cp "$so" out/libretroarch-activity.debug.so; fi
           cd out && sha256sum * > SHA256SUMS.txt
@@ -115,3 +118,29 @@ jobs:
           gh release create "$tag" * --prerelease --target "$GITHUB_SHA" \
             --title "$GITHUB_REF_NAME build $(echo "$GITHUB_SHA" | cut -c1-7)" \
             --notes "Automatic build of $GITHUB_REF_NAME at $GITHUB_SHA."
+
+  # Offers the build to the installed apps (self-update, pkg/android/retrofire): release
+  # retrofire-<run> and retrofire.json in mefistofelix/firetv-apps. Only the retrofire branch, and
+  # only with the secret FIRETV_APPS_TOKEN (a token that can write to that repository); without it
+  # run pkg/android/retrofire/publish-update.sh by hand.
+  publish-update:
+    needs: build
+    if: github.ref == 'refs/heads/retrofire'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: pkg/android/retrofire
+      - uses: actions/download-artifact@v4
+        with:
+          name: retrofire-apk
+          path: dist
+      - name: Publish to firetv-apps
+        env:
+          GH_TOKEN: ${{ secrets.FIRETV_APPS_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "::warning::no FIRETV_APPS_TOKEN: update not offered"; exit 0; fi
+          code=$(sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" dist/version.txt)
+          name=$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" dist/version.txt)
+          [ -n "$code" ] && [ -n "$name" ] || { cat dist/version.txt; exit 1; }
+          bash pkg/android/retrofire/publish-update.sh "$GITHUB_RUN_NUMBER" "$code" "$name" dist/RetroFire.apk

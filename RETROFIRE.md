@@ -82,6 +82,32 @@ changed (size or date). Nothing is deleted. No Core Downloader needed.
 | `input_android_native_keyboard` | `true` / `false` (new, default `false`) | search opens an Android dialog with a text field: the system keyboard, voice dictation included (Fire TV remote microphone). It starts from the current search, the text replaces the filter, "Show All" (or an empty text) removes it |
 | `input_android_physical_keyboard` | `auto` (new) | every full (alphabetic) keyboard is a keyboard, whatever its name; gamepads and remotes are not. The upstream values (one device name, or `vvvv:pppp Name`) still work |
 
+## Self-update
+
+Like FireBro: the installed app updates itself from GitHub, no app store and no PC needed.
+
+- At start-up from the launcher (not when a game is started directly with `ROM`) the app reads
+  `retrofire.json` in the public repository
+  [mefistofelix/firetv-apps](https://github.com/mefistofelix/firetv-apps):
+  `{"versionCode", "versionName", "url", "sha256", "size"}`. At most one check every 2 minutes.
+- A newer `versionCode` is offered in a dialog ("Installa" / "Più tardi"; "Più tardi" hides that
+  build for 12 hours). The APK is downloaded, checked against the SHA-256 and given to the system
+  installer, which asks once more. Android refuses an APK signed with another key.
+- The first time Fire OS asks to allow "Installa app sconosciute" for RetroFire (Developer options).
+- After the update the app opens again by itself (`Relauncher`, `MY_PACKAGE_REPLACED`).
+- Only the `retrofire` flavor has it: `pkg/android/retrofire` (manifest, `Updater`, `Relauncher`);
+  `RetroActivityFuture` calls it by reflection, so the other flavors are unchanged.
+
+Publishing: the workflow's job `publish-update` (branch `retrofire`) runs
+`pkg/android/retrofire/publish-update.sh`, which creates the release `retrofire-<run>` with the APK
+in `firetv-apps` and rewrites `retrofire.json`. It needs the secret `FIRETV_APPS_TOKEN` (a token
+that can write to `firetv-apps`); without it, run the script by hand with `gh`:
+
+    bash pkg/android/retrofire/publish-update.sh <run> <versionCode> <versionName> RetroFire.apk
+
+(`versionCode` and `versionName` are in `version.txt` of the build release). `versionName` is
+`1.22.2-rf<run>`; `versionCode` stays the build time in seconds.
+
 ## Development status
 
 | Feature | Status |

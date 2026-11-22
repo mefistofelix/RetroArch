@@ -64,6 +64,16 @@ public final class RetroActivityFuture extends RetroActivityCamera {
 
     // If QUITFOCUS parameter is provided then enable that Retroarch quits when focus is lost
     quitfocus = getIntent().hasExtra("QUITFOCUS");
+
+    // RetroFire flavor only: offer a newer build (pkg/android/retrofire, absent in other flavors)
+    try {
+      Class.forName("com.retroarch.retrofire.Updater")
+          .getMethod("onStart", android.app.Activity.class).invoke(null, this);
+    } catch (ClassNotFoundException e) {
+      // not the RetroFire build
+    } catch (Exception e) {
+      Log.w("RetroFire", "update check: " + e);
+    }
   }
 
   @Override
