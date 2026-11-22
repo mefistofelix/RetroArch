@@ -731,9 +731,10 @@ void android_repo_poll(void)
       android_repo_core[0] = '\0';
    }
 
-   /* The game lists changed on disk: drop the cached one, and if a game
-    * list is on screen open it again (a plain refresh keeps what it read) */
-   playlist_free_cached();
+   /* The game lists changed on disk: if a game list is on screen open it
+    * again (a plain refresh keeps what it read). The cached playlist is not
+    * freed here: the menu (and the grid's thumbnail streaming, on the video
+    * thread) still uses it; opening the list frees and reloads it */
    menu_st = menu_state_get_ptr();
    if (menu_st && menu_st->entries.list)
    {
