@@ -319,8 +319,11 @@ public final class Repos {
     return n != null && n.endsWith(".lpl") ? n : "Repository.lpl";
   }
 
-  /** Rewrites the repositories' game list (one playlist, every repository) and missing thumbnails. */
-  static void writePlaylists(Context c) {
+  /**
+   * Rewrites the repositories' game list (one playlist, every repository) and missing thumbnails.
+   * Returns true when the list file changed.
+   */
+  static boolean writePlaylists(Context c) {
     Map<String, String> cfg = config(c);
     JSONObject state = loadState(c);
     File plDir = folder(c, cfg, "playlist_directory", "playlists");
@@ -362,8 +365,8 @@ public final class Repos {
         pl = new File(plDir, "Repository.lpl");
       }
       if (items.isEmpty()) {
-        if (pl.isFile() && readFile(pl).contains("\"retrofire_repo\"")) pl.delete();
-        return;
+        if (pl.isFile() && readFile(pl).contains("\"retrofire_repo\"")) { pl.delete(); return true; }
+        return false;
       }
       JSONObject data = new JSONObject()
           .put("version", "1.5")
@@ -375,9 +378,13 @@ public final class Repos {
           .put("left_thumbnail_mode", 0)
           .put("sort_mode", 0)
           .put("items", arr);
-      writeFile(pl, data.toString(2).getBytes("UTF-8"));
+      String text = data.toString(2);
+      if (pl.isFile() && readFile(pl).equals(text)) return false;
+      writeFile(pl, text.getBytes("UTF-8"));
+      return true;
     } catch (Exception e) {
       Log.w(TAG, "repos: game list not written: " + e);
+      return false;
     }
   }
 
@@ -430,25 +437,56 @@ public final class Repos {
   // ================================================================ entry points
 
   /** At app start: refreshes old indexes in the background and rewrites the game list. */
+  static volatile boolean refreshing;
+
+  /**
+   * At app start, and then every INDEX_MAX_AGE while the app runs: asks each repository whether
+   * its index changed (MEGA: size and date of index.rfi, a small request) and downloads it only
+   * then. Without network the request just fails, quietly: the downloaded games do not need it.
+   * The game list is rewritten, and the menu reloaded, only when something changed.
+   */
   public static void onStart(final Activity a) {
-    new Thread(new Runnable() {
+    if (refreshing) return;
+    refreshing = true;
+    Thread t = new Thread(new Runnable() {
       @Override public void run() {
-        JSONObject state = loadState(a);
-        boolean changed = false;
-        for (Repo r : repos(state)) {
-          if (System.currentTimeMillis() - r.j.optLong("checked") < INDEX_MAX_AGE && index(a, r.id()) != null) continue;
-          try {
-            refreshIndex(a, r, false);
-            changed = true;
-          } catch (Exception e) {
-            Log.w(TAG, "repos: " + r.name() + ": " + e.getMessage());
-          }
+        boolean first = true;
+        while (true) {
+          boolean changed = refreshDue(a, first);
+          changed |= writePlaylists(a);
+          if (changed) start(a, "", "");   // the menu reloads the game lists
+          first = false;
+          try { Thread.sleep(INDEX_MAX_AGE); } catch (InterruptedException e) { return; }
         }
-        if (changed) saveState(a, state);
-        writePlaylists(a);
-        if (changed) start(a, "", "");
       }
-    }, "repo-refresh").start();
+    }, "repo-refresh");
+    t.setDaemon(true);
+    t.setPriority(Thread.MIN_PRIORITY);
+    t.start();
+  }
+
+  /** Refreshes the indexes not checked for INDEX_MAX_AGE; true when one of them changed. */
+  static boolean refreshDue(Context c, boolean atStart) {
+    JSONObject state = loadState(c);
+    boolean changed = false, checked = false;
+    for (Repo r : repos(state)) {
+      if (System.currentTimeMillis() - r.j.optLong("checked") < INDEX_MAX_AGE && index(c, r.id()) != null) continue;
+      String before = r.j.optString("stamp");
+      try {
+        refreshIndex(c, r, false);
+        checked = true;
+        changed |= !before.equals(r.j.optString("stamp"));
+      } catch (Exception e) {
+        Log.i(TAG, "repos: " + r.name() + " not checked: " + e.getMessage());
+      }
+    }
+    if (checked) {
+      // keep the newest state of the installed games (a download may have finished meanwhile)
+      JSONObject now = loadState(c);
+      try { now.put("repos", state.getJSONArray("repos")); } catch (org.json.JSONException e) { /* no */ }
+      saveState(c, now);
+    }
+    return changed;
   }
 
   static AlertDialog.Builder builder(Activity a) {
