@@ -643,8 +643,8 @@ public final class Repos {
   }
 
   static void addWithPhone(final Activity a) {
-    final Nostr nostr = new Nostr();
-    String url = nostr.pageUrl(deviceName(a));
+    final Pkarr link = new Pkarr();
+    String url = link.pageUrl(deviceName(a));
     float dp = a.getResources().getDisplayMetrics().density;
     LinearLayout box = new LinearLayout(a);
     box.setOrientation(LinearLayout.VERTICAL);
@@ -672,7 +672,7 @@ public final class Repos {
       @Override public void run() {
         long until = System.currentTimeMillis() + 15 * 60_000L;
         while (open[0] && System.currentTimeMillis() < until) {
-          JSONObject got = nostr.poll();
+          JSONObject got = link.poll();
           if (got != null && open[0]) {
             a.runOnUiThread(new Runnable() {
               @Override public void run() { note.setText("Ricevuto: controllo il repository…"); }

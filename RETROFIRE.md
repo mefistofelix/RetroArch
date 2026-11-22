@@ -114,8 +114,9 @@ Games on demand from encrypted repositories (format in REPOS.md of the RetroFire
 built by `rf repo`). Code: `pkg/android/retrofire/src/com/retroarch/retrofire/repo`.
 
 - Grid side menu "Repository": the list, "+ Aggiungi repository (con il telefono)" (QR code ->
-  `retrofire-pages/addrepo` on the phone -> Nostr event for the QR's topic, encrypted with its
-  key), update the lists, remove a repository.
+  `retrofire-pages/addrepo` on the phone -> a pkarr record (signed DNS record on public pkarr
+  relays, as iroh uses them) for the QR's key, encrypted with the QR's AES key), update the
+  lists, remove a repository.
 - The games of every repository go into one playlist (`menu_startup_playlist`, else
   `Repository.lpl`) with their thumbnails. A game not downloaded has the path
   `/rfrepo/<repo id>/<main file>`: the grid draws it darker with a "Da scaricare" tag, and OK
