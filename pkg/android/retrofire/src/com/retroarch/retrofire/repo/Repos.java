@@ -363,10 +363,7 @@ public final class Repos {
         Log.i(TAG, "repos: " + pl + " belongs to the stick, list written as Repository.lpl");
         pl = new File(plDir, "Repository.lpl");
       }
-      if (items.isEmpty()) {
-        if (pl.isFile() && readFile(pl).contains("\"retrofire_repo\"")) { pl.delete(); return true; }
-        return false;
-      }
+      // no games: the list stays, empty (it is the home screen with the side menu)
       JSONObject data = new JSONObject()
           .put("version", "1.5")
           .put("retrofire_repo", true)

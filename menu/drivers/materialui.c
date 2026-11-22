@@ -5222,6 +5222,7 @@ static void materialui_compute_entries_box_playlist_grid(
 }
 
 static bool materialui_grid_search_empty(materialui_handle_t *mui);
+static bool materialui_grid_no_games(materialui_handle_t *mui);
 static void materialui_render_grid_menu(materialui_handle_t *mui,
       void *userdata, unsigned video_width, unsigned video_height,
       unsigned header_height);
@@ -5395,7 +5396,7 @@ static void materialui_render_menu_entry_playlist_grid(
 
    /* Search without results: drawn in the middle of the screen
     * (materialui_render_grid_search_empty), not as a cell */
-   if (materialui_grid_search_empty(mui))
+   if (materialui_grid_search_empty(mui) || materialui_grid_no_games(mui))
       return;
 
    if (!p_disp->dispctx->handles_transform)
@@ -7004,8 +7005,24 @@ static bool materialui_grid_search_empty(materialui_handle_t *mui)
          && (list->list[0].type == MENU_INFO_MESSAGE);
 }
 
-/* Search without results: the message in the middle of the screen
- * and, below it, a 'show all' button (OK removes the filter) */
+/* Grid home screen with no games at all (no search filter): the game
+ * list is still the home screen, with a message and, on Android, an
+ * 'add a repository' button (RetroFire) */
+static bool materialui_grid_no_games(materialui_handle_t *mui)
+{
+   struct menu_state *menu_st = menu_state_get_ptr();
+   menu_list_t *menu_list     = menu_st->entries.list;
+   file_list_t *list          = menu_list ? MENU_LIST_GET_SELECTION(menu_list, 0) : NULL;
+   return mui->grid_home
+         && (mui->list_view_type == MUI_LIST_VIEW_PLAYLIST_THUMB_GRID)
+         && !menu_entries_search_get_terms()
+         && list && (list->size == 1)
+         && (list->list[0].type == MENU_INFO_MESSAGE);
+}
+
+/* Search without results (or no games): the message in the middle of the
+ * screen and, below it, a button: 'show all' (OK removes the filter), or
+ * 'add a repository' */
 static void materialui_render_grid_search_empty(materialui_handle_t *mui,
       void *userdata, unsigned video_width, unsigned video_height,
       unsigned header_height)
@@ -7014,8 +7031,11 @@ static void materialui_render_grid_search_empty(materialui_handle_t *mui,
    math_matrix_4x4 mymat;
    float icon_color[16];
    gfx_display_t *p_disp      = disp_get_ptr();
-   const char *msg            = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH_NO_RESULTS);
-   const char *btn            = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL);
+   bool no_games              = materialui_grid_no_games(mui);
+   const char *msg            = no_games ? "Ancora nessun gioco"
+         : msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH_NO_RESULTS);
+   const char *btn            = no_games ? "Aggiungi repository"
+         : msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL);
    float centre_x             = (float)video_width / 2.0f;
    float centre_y             = (float)header_height
          + (float)(video_height - header_height) / 2.0f;
@@ -7046,7 +7066,7 @@ static void materialui_render_grid_search_empty(materialui_handle_t *mui,
          video_width, video_height,
          mui->colors.list_highlighted_background, NULL);
    materialui_draw_icon(userdata, p_disp, video_width, video_height,
-         mui->icon_size, mui->textures.list[MUI_TEXTURE_REMOVE],
+         mui->icon_size, mui->textures.list[no_games ? MUI_TEXTURE_ADD : MUI_TEXTURE_REMOVE],
          btn_x + (float)mui->margin, btn_y + (btn_h - (float)mui->icon_size) / 2.0f,
          0, 1, icon_color, &mymat);
    gfx_display_draw_text(mui->font_data.list.font, btn,
@@ -8740,7 +8760,7 @@ static void materialui_frame(void *data, video_frame_info_t *video_info)
             userdata, selection,
             video_width, video_height, list_x_offset);
 
-   if (materialui_grid_search_empty(mui))
+   if (materialui_grid_search_empty(mui) || materialui_grid_no_games(mui))
       materialui_render_grid_search_empty(mui, userdata,
             video_width, video_height, header_height);
 
@@ -11161,6 +11181,15 @@ static enum menu_action materialui_parse_menu_entry_action(
          }
          return MENU_ACTION_NOOP;
       }
+#ifdef ANDROID
+      /* No games: OK is the 'add a repository' button */
+      if (     materialui_grid_no_games(mui)
+            && (action == MENU_ACTION_OK || action == MENU_ACTION_SELECT))
+      {
+         android_repo_open();
+         return MENU_ACTION_NOOP;
+      }
+#endif
       /* Search without results: OK is the 'show all' button */
       if (     materialui_grid_search_empty(mui)
             && (action == MENU_ACTION_OK || action == MENU_ACTION_SELECT))

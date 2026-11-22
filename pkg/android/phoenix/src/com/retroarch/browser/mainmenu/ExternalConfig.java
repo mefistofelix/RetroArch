@@ -109,6 +109,7 @@ public final class ExternalConfig
 		copyBundled(ctx, internal);
 		if (new File(internal, CONFIG).isFile())
 		{
+			ensureStartupPlaylist(internal);
 			Log.i(TAG, "Using the internal " + new File(internal, CONFIG));
 			return new ExternalConfig(internal, internal);
 		}
@@ -143,6 +144,36 @@ public final class ExternalConfig
 		catch (Exception e)
 		{
 			Log.e(TAG, "Bundled config not copied: " + e);
+		}
+	}
+
+	/**
+	 * The game list the menu opens at start (menu_startup_playlist) must exist, even with no
+	 * games yet: it is the home screen (the grid, with its side menu), never RetroArch's
+	 * main menu. Remote repositories fill it in.
+	 */
+	private static void ensureStartupPlaylist(File dir)
+	{
+		try
+		{
+			String name = readTemplate(new File(dir, CONFIG)).get("menu_startup_playlist");
+			if (name == null)
+				return;
+			name = name.replace("\"", "").trim();
+			if (!name.endsWith(".lpl"))
+				return;
+			File pl = new File(new File(dir, "playlists"), name);
+			if (pl.isFile())
+				return;
+			pl.getParentFile().mkdirs();
+			PrintWriter w = new PrintWriter(pl);
+			w.println("{\"version\": \"1.5\", \"retrofire_repo\": true, \"default_core_path\": \"\", \"default_core_name\": \"\", \"items\": []}");
+			w.close();
+			Log.i(TAG, "Empty game list created: " + pl);
+		}
+		catch (IOException e)
+		{
+			Log.e(TAG, "Start-up game list not created: " + e);
 		}
 	}
 
