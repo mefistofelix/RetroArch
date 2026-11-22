@@ -93,6 +93,10 @@
 #include "../../menu/menu_entries.h"
 #else
 #include "../../command.h"
+#ifdef ANDROID
+#include "../../playlist.h"
+#include "../../tasks/task_content.h"
+#endif
 #endif
 
 #include "platform_unix.h"
@@ -669,6 +673,90 @@ void android_text_input_poll(void)
    android_text_input_state = 0;
    if (cb)
       cb(state == 1 ? android_text_input_text : NULL);
+}
+
+/* RetroFire remote repositories: Java hands a content (and its core) back
+ * from its UI thread; the main thread loads it in android_repo_poll() */
+static char android_repo_content[PATH_MAX_LENGTH];
+static char android_repo_core[PATH_MAX_LENGTH];
+static volatile int android_repo_state = 0; /* 1 = something to do */
+
+bool android_repo_open(void)
+{
+   JNIEnv *env = jni_thread_getenv();
+   if (!env || !g_android || !g_android->repoOpen)
+      return false;
+   CALL_VOID_METHOD(env, g_android->activity->clazz, g_android->repoOpen);
+   return true;
+}
+
+bool android_repo_launch(const char *content, const char *core, const char *label)
+{
+   jstring jcontent, jcore, jlabel;
+   JNIEnv *env = jni_thread_getenv();
+   if (!env || !g_android || !g_android->repoLaunch)
+      return false;
+   jcontent = (*env)->NewStringUTF(env, content ? content : "");
+   jcore    = (*env)->NewStringUTF(env, core    ? core    : "");
+   jlabel   = (*env)->NewStringUTF(env, label   ? label   : "");
+   CALL_VOID_METHOD_PARAM(env, g_android->activity->clazz,
+         g_android->repoLaunch, jcontent, jcore, jlabel);
+   (*env)->DeleteLocalRef(env, jcontent);
+   (*env)->DeleteLocalRef(env, jcore);
+   (*env)->DeleteLocalRef(env, jlabel);
+   return true;
+}
+
+void android_repo_poll(void)
+{
+   struct menu_state *menu_st;
+   if (!android_repo_state)
+      return;
+   __sync_synchronize();
+   android_repo_state = 0;
+
+   /* The game lists changed on disk: drop the cached one and rebuild */
+   playlist_free_cached();
+   menu_st = menu_state_get_ptr();
+   if (menu_st)
+      menu_st->flags |= MENU_ST_FLAG_ENTRIES_NEED_REFRESH;
+
+   if (!string_is_empty(android_repo_content) && !string_is_empty(android_repo_core))
+   {
+      content_ctx_info_t content_info;
+      content_info.argc        = 0;
+      content_info.argv        = NULL;
+      content_info.args        = NULL;
+      content_info.environ_get = NULL;
+      task_push_load_content_with_new_core_from_menu(
+            android_repo_core, android_repo_content,
+            &content_info, CORE_TYPE_PLAIN, NULL, NULL);
+   }
+}
+
+/*
+ * Class:     com_retroarch_browser_retroactivity_RetroActivityCommon
+ * Method:    repoStart
+ * Signature: (Ljava/lang/String;Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_com_retroarch_browser_retroactivity_RetroActivityCommon_repoStart
+      (JNIEnv *env, jobject this_obj, jstring content_obj, jstring core_obj)
+{
+   const char *s;
+   android_repo_content[0] = '\0';
+   android_repo_core[0]    = '\0';
+   if (content_obj && (s = (*env)->GetStringUTFChars(env, content_obj, NULL)))
+   {
+      strlcpy(android_repo_content, s, sizeof(android_repo_content));
+      (*env)->ReleaseStringUTFChars(env, content_obj, s);
+   }
+   if (core_obj && (s = (*env)->GetStringUTFChars(env, core_obj, NULL)))
+   {
+      strlcpy(android_repo_core, s, sizeof(android_repo_core));
+      (*env)->ReleaseStringUTFChars(env, core_obj, s);
+   }
+   __sync_synchronize();
+   android_repo_state = 1;
 }
 
 /*
@@ -2260,6 +2348,10 @@ static void frontend_unix_init(void *data)
          "isScreenReaderEnabled", "()Z");
    GET_METHOD_ID(env, android_app->accessibilitySpeak, class,
          "accessibilitySpeak", "(Ljava/lang/String;)V");
+   GET_METHOD_ID(env, android_app->repoOpen, class,
+         "repoOpen", "()V");
+   GET_METHOD_ID(env, android_app->repoLaunch, class,
+         "repoLaunch", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
    GET_METHOD_ID(env, android_app->showTextInput, class,
          "showTextInput", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
 

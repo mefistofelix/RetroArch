@@ -552,6 +552,43 @@ public class RetroActivityCommon extends NativeActivity
   public native void textInputDone(String text);
 
   /**
+   * RetroFire remote repositories (pkg/android/retrofire, RetroFire flavor only): loads the
+   * content with the core on the main thread; an empty content only reloads the game lists.
+   */
+  public native void repoStart(String content, String core);
+
+  private boolean callRepos(String method, Class<?>[] types, Object... args)
+  {
+    try
+    {
+      Class.forName("com.retroarch.retrofire.repo.Repos").getMethod(method, types).invoke(null, args);
+      return true;
+    }
+    catch (ClassNotFoundException e)
+    {
+      return false; // not the RetroFire build
+    }
+    catch (Exception e)
+    {
+      Log.w("RetroFire", "repos." + method + ": " + e);
+      return false;
+    }
+  }
+
+  /** The "Repository" screen (grid side menu). */
+  public void repoOpen()
+  {
+    callRepos("open", new Class<?>[] { android.app.Activity.class }, this);
+  }
+
+  /** A game of a remote repository that is not downloaded yet (playlist path /rfrepo/...). */
+  public void repoLaunch(String content, String core, String label)
+  {
+    callRepos("launch", new Class<?>[] { android.app.Activity.class, String.class, String.class, String.class },
+        this, content, core, label);
+  }
+
+  /**
    * Native text input (input_android_native_keyboard): a dialog with a text field, so the
    * system keyboard comes up, voice dictation included (Fire TV remote microphone).
    * With a clearLabel, a third button returns an empty text (e.g. remove a search filter).

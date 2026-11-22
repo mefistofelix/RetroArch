@@ -41,6 +41,9 @@
 #include "../../ui/ui_companion_driver.h"
 
 #include "../menu_driver.h"
+#ifdef ANDROID
+#include "../../frontend/drivers/platform_unix.h"
+#endif
 #include "../menu_displaylist.h"
 #include "../menu_screensaver.h"
 
@@ -442,6 +445,7 @@ typedef struct
    } thumbnails;
    unsigned icon_texture_index;
    unsigned grid_icon;   /* grid view: index + 1 in mui->grid_icons, 0 = none yet */
+   bool grid_remote;     /* grid view: game of a remote repository, not downloaded yet */
    float grid_box_alpha; /* grid view: box art opacity over the screenshot */
    float entry_width;
    float entry_height;
@@ -5430,6 +5434,42 @@ static void materialui_render_menu_entry_playlist_grid(
             GFX_THUMBNAIL_ALIGN_CENTRE,
             mui->transition_alpha, 1.0f, NULL);
 
+   /* Remote game not downloaded yet: the picture a bit darker and a
+    * 'Da scaricare' tag in the top left corner */
+   if (node->grid_remote)
+   {
+      float shade[16];
+      float tag_color[16];
+      const char *tag = "Da scaricare";
+      float tag_h     = (float)mui->font_data.hint.line_height + half_margin;
+      float tag_w     = (float)font_driver_get_message_width(
+            mui->font_data.hint.font, tag, strlen(tag), 1.0f) + (float)mui->margin;
+
+      for (i = 0; i < 16; i += 4)
+      {
+         shade[i + 0]     = 0.0f;
+         shade[i + 1]     = 0.0f;
+         shade[i + 2]     = 0.0f;
+         shade[i + 3]     = 0.35f * mui->transition_alpha;
+         tag_color[i + 0] = 1.0f;
+         tag_color[i + 1] = 0.48f;
+         tag_color[i + 2] = 0.1f;
+         tag_color[i + 3] = 0.95f * mui->transition_alpha;
+      }
+      gfx_display_draw_quad(p_disp, userdata, video_width, video_height,
+            (int)thumb_x, (int)thumb_y, (unsigned)thumb_w, (unsigned)thumb_h,
+            video_width, video_height, shade, NULL);
+      gfx_display_draw_quad(p_disp, userdata, video_width, video_height,
+            (int)(thumb_x + half_margin), (int)(thumb_y + half_margin),
+            (unsigned)tag_w, (unsigned)tag_h,
+            video_width, video_height, tag_color, NULL);
+      gfx_display_draw_text(mui->font_data.hint.font, tag,
+            thumb_x + (float)mui->margin,
+            thumb_y + half_margin + half_margin / 2.0f + (float)mui->font_data.hint.line_ascender,
+            video_width, video_height, 0x11111100 | text_alpha,
+            TEXT_ALIGN_LEFT, 1.0f, false, 0.0f, (x_offset != 0));
+   }
+
    /* System icon, small, in the top right corner */
    if (     node->grid_icon > 0
          && node->grid_icon <= mui->grid_icons_count
@@ -5583,14 +5623,18 @@ static bool materialui_render_process_entry_playlist_grid(
             prim, want_box,
             thumbnail_upscale_threshold, network_on_demand_thumbnails);
 
-   if (     (node->grid_icon == 0 || node->grid_icon > mui->grid_icons_count)
-         && mui->playlist
-         && playlist_idx < playlist_size(mui->playlist))
+   if (mui->playlist && playlist_idx < playlist_size(mui->playlist))
    {
       const struct playlist_entry *pl_entry = NULL;
       playlist_get_index(mui->playlist, playlist_idx, &pl_entry);
       if (pl_entry)
-         node->grid_icon = materialui_grid_icon(mui, pl_entry->db_name);
+      {
+         if (node->grid_icon == 0 || node->grid_icon > mui->grid_icons_count)
+            node->grid_icon = materialui_grid_icon(mui, pl_entry->db_name);
+         /* RetroFire: '/rfrepo/...' = remote game, not downloaded yet */
+         node->grid_remote = pl_entry->path
+               && string_starts_with(pl_entry->path, "/rfrepo/");
+      }
    }
 
    return true;
@@ -6910,11 +6954,12 @@ static void materialui_render_entry_touch_feedback(
  * It opens when moving left from the first column or right from the
  * last one, or with 'back'; up/down choose, OK runs the action, the
  * opposite direction or 'back' closes it */
-#define MUI_GRID_MENU_SIZE 4
+#define MUI_GRID_MENU_SIZE 5
 enum
 {
    MUI_GRID_ITEM_SEARCH = 0,
    MUI_GRID_ITEM_SHOW_ALL,
+   MUI_GRID_ITEM_REPOS,    /* RetroFire remote repositories (Android) */
    MUI_GRID_ITEM_SETTINGS,
    MUI_GRID_ITEM_QUIT
 };
@@ -6926,6 +6971,9 @@ static unsigned materialui_grid_menu_items(int *items)
    items[n++] = MUI_GRID_ITEM_SEARCH;
    if (menu_entries_search_get_terms())
       items[n++] = MUI_GRID_ITEM_SHOW_ALL;
+#ifdef ANDROID
+   items[n++] = MUI_GRID_ITEM_REPOS;
+#endif
    items[n++] = MUI_GRID_ITEM_SETTINGS;
    items[n++] = MUI_GRID_ITEM_QUIT;
    return n;
@@ -7023,6 +7071,11 @@ static void materialui_grid_menu_activate(materialui_handle_t *mui)
       case MUI_GRID_ITEM_SHOW_ALL:
          materialui_grid_clear_search(mui);
          break;
+#ifdef ANDROID
+      case MUI_GRID_ITEM_REPOS:
+         android_repo_open();
+         break;
+#endif
       case MUI_GRID_ITEM_SETTINGS:
          generic_action_ok_displaylist_push("", NULL,
                msg_hash_to_str(MENU_ENUM_LABEL_INPUT_SETTINGS),
@@ -7070,6 +7123,10 @@ static void materialui_render_grid_menu(materialui_handle_t *mui,
          case MUI_GRID_ITEM_SHOW_ALL:
             textures[i] = MUI_TEXTURE_REMOVE;
             labels[i]   = MENU_ENUM_LABEL_VALUE_SEARCH_SHOW_ALL;
+            break;
+         case MUI_GRID_ITEM_REPOS:
+            textures[i] = MUI_TEXTURE_UPDATER;
+            labels[i]   = MSG_UNKNOWN;
             break;
          case MUI_GRID_ITEM_SETTINGS:
             textures[i] = MUI_TEXTURE_SETTINGS;
@@ -7122,6 +7179,8 @@ static void materialui_render_grid_menu(materialui_handle_t *mui,
          snprintf(label_buf, sizeof(label_buf), "%s: %s",
                msg_hash_to_str(labels[i]), terms->terms[terms->size - 1]);
       }
+      else if (items[i] == MUI_GRID_ITEM_REPOS)
+         strlcpy(label_buf, "Repository", sizeof(label_buf));
       else
          strlcpy(label_buf, msg_hash_to_str(labels[i]), sizeof(label_buf));
       gfx_display_draw_text(mui->font_data.list.font, label_buf,
@@ -12449,6 +12508,7 @@ static void materialui_list_insert(void *userdata,
 
    /* Grid view: icon and box art opacity of the new entry */
    node->grid_icon      = 0;
+   node->grid_remote    = false;
    node->grid_box_alpha = 0.0f;
 
    node->icon_type          = MUI_ICON_TYPE_NONE;

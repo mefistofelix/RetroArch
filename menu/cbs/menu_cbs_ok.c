@@ -46,6 +46,9 @@
 
 #include "../menu_driver.h"
 #include "../menu_cbs.h"
+#ifdef ANDROID
+#include "../../frontend/drivers/platform_unix.h"
+#endif
 #include "../menu_entries.h"
 #include "../menu_setting.h"
 #if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
@@ -2762,6 +2765,18 @@ static int action_ok_playlist_entry_collection(const char *path,
    /* Cache entry label */
    if (!string_is_empty(entry->label))
       strlcpy(content_label, entry->label, sizeof(content_label));
+
+#ifdef ANDROID
+   /* RetroFire: a game of a remote repository that is not downloaded yet.
+    * The Java side shows what it needs, downloads it and starts it. */
+   if (string_starts_with(content_path, ANDROID_REPO_PREFIX))
+   {
+      bool handled = android_repo_launch(content_path, entry->core_path, content_label);
+      if (playlist_initialized && tmp_playlist)
+         playlist_free(tmp_playlist);
+      return handled ? 0 : -1;
+   }
+#endif
 
    /* Get core path */
    if (!playlist_entry_has_core(entry))

@@ -91,6 +91,12 @@ public final class Updater {
 
   /** Called by the game activity when it is created: checks in the background, offers a newer build. */
   public static void onStart(final Activity activity) {
+    // remote repositories: newer indexes and the game list, in the background
+    try {
+      com.retroarch.retrofire.repo.Repos.onStart(activity);
+    } catch (Throwable t) {
+      Log.w(TAG, "repos at start: " + t);
+    }
     if (Build.VERSION.SDK_INT < 21 || busy) return;
     if (activity.getIntent() != null && activity.getIntent().hasExtra("ROM")) return; // a game started directly
     final SharedPreferences p = prefs(activity);

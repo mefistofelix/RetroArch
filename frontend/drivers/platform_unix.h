@@ -183,6 +183,8 @@ struct android_app
    jmethodID isScreenReaderEnabled;
    jmethodID accessibilitySpeak;
    jmethodID showTextInput;
+   jmethodID repoOpen;
+   jmethodID repoLaunch;
 
    struct
    {
@@ -387,6 +389,19 @@ typedef void (*android_text_input_cb_t)(const char *text);
 bool android_text_input_start(const char *title, const char *text,
       const char *clear_label, android_text_input_cb_t cb);
 void android_text_input_poll(void);
+
+/* RetroFire remote repositories (Java side: pkg/android/retrofire, RetroFire
+ * flavor only; the methods do nothing in other builds).
+ * android_repo_open(): the "Repository" screen.
+ * android_repo_launch(): a playlist entry whose path starts with
+ * ANDROID_REPO_PREFIX is a game not downloaded yet; Java shows what it needs,
+ * downloads it and, when the user says so, hands the content back.
+ * android_repo_poll(): on the main thread, loads the content Java handed back
+ * (or reloads the game lists when Java only changed them) */
+#define ANDROID_REPO_PREFIX "/rfrepo/"
+bool android_repo_open(void);
+bool android_repo_launch(const char *content, const char *core, const char *label);
+void android_repo_poll(void);
 
 #ifdef HAVE_SAF
 void android_show_saf_tree_picker(void);

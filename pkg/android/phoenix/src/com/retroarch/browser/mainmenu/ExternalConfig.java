@@ -101,6 +101,15 @@ public final class ExternalConfig
 				return new ExternalConfig(cfg.getParentFile(), appData);
 			}
 		}
+
+		// No disk has one: the copy installed from a remote repository (RetroFire flavor,
+		// <files>/RetroFire/retroarch.cfg), where {cfgdir} and {appdata} are that same folder.
+		File internal = new File(ctx.getFilesDir(), FOLDER);
+		if (new File(internal, CONFIG).isFile())
+		{
+			Log.i(TAG, "Using the internal " + new File(internal, CONFIG));
+			return new ExternalConfig(internal, internal);
+		}
 		return null;
 	}
 

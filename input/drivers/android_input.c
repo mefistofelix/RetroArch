@@ -1707,6 +1707,8 @@ static void android_input_poll(void *data)
 
    /* Text from the native text input dialog, if any */
    android_text_input_poll();
+   /* Content or new game lists from the remote repositories (RetroFire) */
+   android_repo_poll();
 }
 
 bool android_run_events(void *data)

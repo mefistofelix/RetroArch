@@ -3,7 +3,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.retroarch">
     <!-- the system installer still asks the user -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <application>
+    <application android:usesCleartextTraffic="true">
         <!-- reopens RetroFire after a self-update -->
         <receiver android:name="com.retroarch.retrofire.Relauncher" android:exported="false">
             <intent-filter>
