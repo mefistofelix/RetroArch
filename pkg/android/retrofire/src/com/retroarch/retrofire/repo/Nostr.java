@@ -28,7 +28,8 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public final class Nostr {
   public static final String[] RELAYS = {
-      "wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.nostr.band" };
+      "wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://relay.nostr.band",
+      "wss://offchain.pub", "wss://nostr.mom" };
   public static final String PAGE = "https://mefistofelix.github.io/retrofire-pages/addrepo/";
 
   public final String topic;
