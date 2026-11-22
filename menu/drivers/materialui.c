@@ -8734,7 +8734,7 @@ static void materialui_frame(void *data, video_frame_info_t *video_info)
 
    /* Draw 'highlighted entry' selection box
     * (none for the 'no results' screen of the grid search) */
-   if (!materialui_grid_search_empty(mui))
+   if (!materialui_grid_search_empty(mui) && !materialui_grid_no_games(mui))
    materialui_render_selection_highlight(
          mui,
          p_disp,
