@@ -143,11 +143,23 @@ public abstract class Source {
         JSONArray nodes = res.getJSONArray("f");
         Cipher ecb = Cipher.getInstance("AES/ECB/NoPadding");
         ecb.init(Cipher.DECRYPT_MODE, new SecretKeySpec(master, "AES"));
+        // the shared folder: the node whose parent is not in the listing
+        java.util.Set<String> handles = new java.util.HashSet<String>(), roots = new java.util.HashSet<String>();
+        for (int i = 0; i < nodes.length(); i++) handles.add(nodes.getJSONObject(i).optString("h"));
+        for (int i = 0; i < nodes.length(); i++)
+          if (!handles.contains(nodes.getJSONObject(i).optString("p"))) roots.add(nodes.getJSONObject(i).optString("h"));
         for (int i = 0; i < nodes.length(); i++) {
           JSONObject n = nodes.getJSONObject(i);
-          String k = n.optString("k");
-          if (n.optInt("t", -1) != 0 || k.indexOf(':') < 0) continue;
-          byte[] enc = b64(k.substring(k.indexOf(':') + 1));
+          if (n.optInt("t", -1) != 0) continue;
+          // "k" can hold several "<handle>:<key>" separated by "/": the shared folder's one is
+          // encrypted with the link's key
+          String piece = null;
+          for (String part : n.optString("k").split("/")) {
+            int colon = part.indexOf(':');
+            if (colon > 0 && roots.contains(part.substring(0, colon))) piece = part.substring(colon + 1);
+          }
+          if (piece == null) continue;
+          byte[] enc = b64(piece);
           if (enc.length != 32) continue;
           byte[] full = ecb.doFinal(enc);
           byte[] key = new byte[16];
