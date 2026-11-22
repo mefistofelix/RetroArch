@@ -108,6 +108,25 @@ It takes `RetroFire.apk` and `version.txt` from the release `build-retrofire` an
 `firetv-apps` and rewrites `retrofire.json`. `versionName` is `1.22.2-rf<run>`; `versionCode`
 stays the build time in seconds. `rf install` allows "install unknown apps" for RetroFire over adb.
 
+## Remote repositories
+
+Games on demand from encrypted repositories (format in REPOS.md of the RetroFire project,
+built by `rf repo`). Code: `pkg/android/retrofire/src/com/retroarch/retrofire/repo`.
+
+- Grid side menu "Repository": the list, "+ Aggiungi repository (con il telefono)" (QR code ->
+  `retrofire-pages/addrepo` on the phone -> Nostr event for the QR's topic, encrypted with its
+  key), update the lists, remove a repository.
+- The games of every repository go into one playlist (`menu_startup_playlist`, else
+  `Repository.lpl`) with their thumbnails. A game not downloaded has the path
+  `/rfrepo/<repo id>/<main file>`: the grid draws it darker with a "Da scaricare" tag, and OK
+  hands it to Java (`android_repo_launch`), which shows what it needs (game, core, BIOS, config:
+  sizes, source, time), offers games to delete when space is short (least played first,
+  checkboxes), downloads, and asks "Gioca"; `repoStart` loads it on the main thread.
+- Indexes are checked at start and every 6 h, downloaded only when changed (MEGA: size and
+  date of `index.rfi`). Without network nothing waits: downloaded games have their real path.
+- Without a disk config, the RetroFire config of a repository is installed in
+  `<files>/RetroFire` and used like a stick's (`ExternalConfig`), then the app restarts.
+
 ## Development status
 
 | Feature | Status |
@@ -126,11 +145,6 @@ stays the build time in seconds. `rf install` allows "install unknown apps" for 
 | RetroFire PC tools (`rf install`, `rf cores`, `rf push`) write the stick layout and install the APK | done, in use on the Fire TV 4K Max since 8 Nov 2026 |
 
 ## To do later
-
-- **Games on demand.** A playlist that points to a URL (`playlist url = ...`) with all the
-  metadata: game list, files, the core and BIOS each game needs. A game, its core and BIOS
-  are downloaded when first started, kept in a local cache, and removed (after asking) when
-  the cache is full or unused.
 
 ## Build
 
