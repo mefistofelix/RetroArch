@@ -125,8 +125,15 @@ built by `rf repo`). Code: `pkg/android/retrofire/src/com/retroarch/retrofire/re
   checkboxes), downloads, and asks "Gioca"; `repoStart` loads it on the main thread.
 - Indexes are checked at start and every 6 h, downloaded only when changed (MEGA: size and
   date of `index.rfi`). Without network nothing waits: downloaded games have their real path.
-- Without a disk config, the RetroFire config of a repository is installed in
-  `<files>/RetroFire` and used like a stick's (`ExternalConfig`), then the app restarts.
+- Without a disk config the app uses its bundled RetroFire config (`assets/retrofire`, written
+  by `rf app-config`: template, pad profiles, per-core options and remaps), copied to
+  `<files>/RetroFire` at the first start of each version. Repositories hold only data (games
+  with their own settings, cores, BIOS): adding one never needs a restart. The start-up game
+  list always exists, so the app opens on the grid (empty: "Ancora nessun gioco" and an
+  "Aggiungi repository" button).
+- `video_driver_set_stub_frame()` called twice (Android: focus lost twice when one dialog
+  replaces another) used to lose the real frame function: nothing was drawn again. Fixed
+  in `gfx/video_driver.c` (upstream bug).
 
 ## Development status
 
