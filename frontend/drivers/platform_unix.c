@@ -57,6 +57,7 @@
 
 #ifdef ANDROID
 #include <sys/system_properties.h>
+#include <android/log.h>
 #ifdef HAVE_SAF
 #include <vfs/vfs_implementation_saf.h>
 #include "../../menu/menu_cbs.h"
@@ -717,6 +718,8 @@ void android_repo_poll(void)
       return;
    __sync_synchronize();
    android_repo_state = 0;
+   __android_log_print(ANDROID_LOG_INFO, "RetroFire", "repo poll: content='%s' core='%s' unfocused=%d",
+         android_repo_content, android_repo_core, g_android ? (int)g_android->unfocused : -1);
 
    /* "!focus": Java calls this after its dialog is gone. A dialog takes the
     * window focus (APP_CMD_LOST_FOCUS: paused, idle, 'stub frame', nothing

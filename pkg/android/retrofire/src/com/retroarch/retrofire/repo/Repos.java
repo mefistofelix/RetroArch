@@ -484,6 +484,7 @@ public final class Repos {
 
   /** Loads content (or, with an empty content, only reloads the game lists) on the native side. */
   static void start(Activity a, String content, String core) {
+    Log.i(TAG, "repos: repoStart('" + content + "', '" + core + "')");
     try {
       a.getClass().getMethod("repoStart", String.class, String.class).invoke(a, content, core);
     } catch (Exception e) {
