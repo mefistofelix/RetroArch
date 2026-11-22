@@ -98,15 +98,15 @@ Like FireBro: the installed app updates itself from GitHub, no app store and no 
 - Only the `retrofire` flavor has it: `pkg/android/retrofire` (manifest, `Updater`, `Relauncher`);
   `RetroActivityFuture` calls it by reflection, so the other flavors are unchanged.
 
-Publishing: the workflow's job `publish-update` (branch `retrofire`) runs
-`pkg/android/retrofire/publish-update.sh`, which creates the release `retrofire-<run>` with the APK
-in `firetv-apps` and rewrites `retrofire.json`. It needs the secret `FIRETV_APPS_TOKEN` (a token
-that can write to `firetv-apps`); without it, run the script by hand with `gh`:
+Publishing, as FireBro does it (no token in CI): after the workflow has built the `retrofire`
+branch, run on the PC (Git Bash, gh logged in)
 
-    bash pkg/android/retrofire/publish-update.sh <run> <versionCode> <versionName> RetroFire.apk
+    bash pkg/android/retrofire/publish-latest.sh
 
-(`versionCode` and `versionName` are in `version.txt` of the build release). `versionName` is
-`1.22.2-rf<run>`; `versionCode` stays the build time in seconds.
+It takes `RetroFire.apk` and `version.txt` from the release `build-retrofire` and runs
+`publish-update.sh`, which creates the release `retrofire-<run>` with `RetroFire-<run>.apk` in
+`firetv-apps` and rewrites `retrofire.json`. `versionName` is `1.22.2-rf<run>`; `versionCode`
+stays the build time in seconds. `rf install` allows "install unknown apps" for RetroFire over adb.
 
 ## Development status
 
